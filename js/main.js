@@ -2,7 +2,7 @@
  * Application bootstrap.
  *
  * Two views (landing, editor) and one router. Everything else — progression
- * state, sheet music rendering, audio, coach — lives inside the editor view
+ * state, sheet music rendering, audio — lives inside the editor view
  * so navigating away and back gives a clean slate.
  *
  *   #/           → landing view
@@ -58,11 +58,11 @@ if (startupSplash && shouldShowStartupSplash()) {
   // invisibly behind its black handoff stage.
   document.body.append(startupSplash);
   const splashController = mountStartupSplash(startupSplash);
-  const startupTenutino = await beginStartupHandoff(startupSplash);
+  const startupCharacter = await beginStartupHandoff(startupSplash);
   splashController.destroy();
   await router.start();
   const destination = await waitForStartupHandoffTarget(appRoot);
-  await completeStartupHandoff(startupSplash, startupTenutino, destination);
+  await completeStartupHandoff(startupSplash, startupCharacter, destination);
 } else {
   startupSplash?.remove();
   await router.start();

@@ -30,7 +30,7 @@ import { compileProgression } from './engine/compile.js';
  * only editor-view applies them (CSS custom property + <html> attribute).
  * @typedef {Object} Theme
  * @property {string} accent     One of ACCENT_PRESETS' hex values. Drives the CSS --accent variable.
- * @property {'jazztext'|'classical'} chordFont  Which family renders chord symbols and project titles.
+ * @property {'jazztext'|'classical'|'scifi'} chordFont  Which family renders chord symbols and project titles.
  */
 
 /**
@@ -87,9 +87,9 @@ import { compileProgression } from './engine/compile.js';
  * @typedef {Object} Segment
  * @property {number[]}    notes         Resolved pitches (post voice-leading for techniques).
  * @property {number}      durationBeats One standard note-value (from [4,3,2,1,0.5,0.25]).
- * @property {boolean}     isTechnique   Colour + whether the coach explains it.
+ * @property {boolean}     isTechnique   Colour: generated (technique) vs. user-entered.
  * @property {string}      sourceId      TIES: adjacent segments sharing this get a StaveTie.
- * @property {number|null} seamIndex     Which seam produced it (coach lookup); null for user chords.
+ * @property {number|null} seamIndex     Which seam produced it; null for user chords.
  * @property {number}      measureIndex  Which stave this draws on.
  * @property {number}      startBeat     MEASURE-RELATIVE. Absolute = measureIndex*measureLength + startBeat.
  */
@@ -207,9 +207,9 @@ const ACCENT_HEX_SET = new Set(ACCENT_PRESETS.map((p) => p.hex));
 
 export const DEFAULT_ACCENT = ACCENT_PRESETS[0].hex;
 
-export const CHORD_FONTS = /** @type {const} */ (['jazztext', 'classical']);
+export const CHORD_FONTS = /** @type {const} */ (['jazztext', 'classical', 'scifi']);
 const CHORD_FONT_SET = new Set(CHORD_FONTS);
-export const DEFAULT_CHORD_FONT = 'jazztext';
+export const DEFAULT_CHORD_FONT = 'scifi';
 
 /** @returns {Theme} */
 export function makeTheme(overrides = {}) {

@@ -4,11 +4,29 @@
     --panel-splitter-width: 12px;
     display: grid;
     grid-template-columns: var(--editor-pane-width, minmax(410px, 38vw)) var(--panel-splitter-width) minmax(0, 1fr);
-    min-height: 100vh
+    min-height: 100vh;
+    transition: grid-template-columns .32s cubic-bezier(.2, .7, .2, 1)
+}
+
+/* Dragging the splitter or actively resizing should track the pointer
+   instantly — only the deliberate collapse/expand click gets the eased
+   transition above. */
+.app-shell.is-resizing {
+    transition: none
+}
+
+/* While collapsed, the editor pane's own padded content would otherwise
+   overflow its zero-width grid track and force a horizontal scrollbar. */
+.app-shell.is-editor-collapsed #editor-pane-mount {
+    overflow: hidden
 }
 
 /* A visible seam with a wider hit target makes the workspace proportions
    directly adjustable without taking space away from either panel. */
+/* No visible line down the seam — it fought visually with the collapse
+   toggle sitting on top of it. The strip is still a full-height drag target
+   (cursor: col-resize) and the toggle button remains the one visible
+   affordance on this seam. */
 .panel-resizer {
     position: relative;
     z-index: 10;
@@ -17,29 +35,53 @@
     outline: none
 }
 
-.panel-resizer::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    width: 1px;
-    transform: translateX(-50%);
-    background: var(--hairline);
-    transition: width .12s ease, background .12s ease
-}
-
-.panel-resizer:hover::before,
-.panel-resizer:focus-visible::before,
-.app-shell.is-resizing .panel-resizer::before {
-    width: 3px;
-    background: var(--accent)
-}
-
 .app-shell.is-resizing,
 .app-shell.is-resizing * {
     cursor: col-resize !important;
     user-select: none
+}
+
+/* Collapse/expand handle — a small circular bump centered on the seam so it
+   stays reachable no matter how narrow either pane currently is. */
+.panel-collapse-toggle {
+    position: absolute;
+    z-index: 11;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill);
+    background: var(--panel-2);
+    color: var(--tan-dim);
+    cursor: pointer;
+    transition: color .15s ease, border-color .15s ease, background .15s ease
+}
+
+.panel-collapse-toggle:hover,
+.panel-collapse-toggle:focus-visible {
+    color: var(--ivory);
+    border-color: var(--accent-border);
+    background: var(--accent-soft)
+}
+
+.panel-collapse-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px
+}
+
+.panel-collapse-toggle svg {
+    width: 13px;
+    height: 13px;
+    transition: transform .32s cubic-bezier(.2, .7, .2, 1)
+}
+
+.app-shell.is-editor-collapsed .panel-collapse-toggle svg {
+    transform: rotate(180deg)
 }
 
 @media(max-width:1000px) {

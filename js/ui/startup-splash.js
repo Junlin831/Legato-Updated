@@ -73,8 +73,8 @@ export function mountStartupSplash(splash, {
 export { SUPPORT_MESSAGES };
 
 /** Pin the splash character to its painted viewport coordinates. */
-export function pinStartupTenutino(splash) {
-  const character = splash?.querySelector('.startup-splash-tenutino');
+export function pinStartupCharacter(splash) {
+  const character = splash?.querySelector('.startup-splash-character');
   if (!character) return null;
   const rect = character.getBoundingClientRect();
   Object.assign(character.style, {
@@ -92,13 +92,14 @@ export function pinStartupTenutino(splash) {
 
 /**
  * Hold the full loading composition for 1.5 seconds, then fade every element
- * except Tenutino so the next view can be mounted behind an opaque black veil.
+ * except the character so the next view can be mounted behind an opaque black
+ * veil.
  */
 export async function beginStartupHandoff(splash, {
   elapsedMs = 0,
   reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   wait = delay,
-  pin = pinStartupTenutino,
+  pin = pinStartupCharacter,
 } = {}) {
   if (!splash) return null;
   const holdMs = Math.max(0, STARTUP_SPLASH_DURATION_MS - elapsedMs);
@@ -109,13 +110,13 @@ export async function beginStartupHandoff(splash, {
   return character;
 }
 
-/** Prefer the score companion; fully mounted views may fall back to brand. */
+/**
+ * Only accept a brand mark after its view identifies itself as ready. The
+ * editor mounts its brand before score layout finishes; accepting that early
+ * node would race the destination view's own layout pass.
+ */
 export function queryStartupHandoffTarget(root = document) {
-  return root.querySelector('.tenutino-root:not([hidden]) .tenutino-character img')
-    // Only accept a brand after its view identifies itself as ready. The
-    // editor mounts its brand before score layout finishes; accepting that
-    // early node would race the cached measure destination.
-    ?? root.querySelector('.landing-shell .brand-mark, .app-shell[data-view-ready] .brand-mark');
+  return root.querySelector('.landing-shell .brand-mark, .app-shell[data-view-ready] .brand-mark');
 }
 
 export async function waitForStartupHandoffTarget(root = document, {
@@ -159,7 +160,7 @@ export async function completeStartupHandoff(splash, character, target, {
     const travelMs = reducedMotion ? 0 : startupHandoffDuration(fromRect, toRect);
     previousVisibility = target.style.visibility;
     target.style.visibility = 'hidden';
-    character.style.setProperty('--startup-tenutino-travel-ms', `${ travelMs }ms`);
+    character.style.setProperty('--startup-character-travel-ms', `${ travelMs }ms`);
     character.classList.add('is-travelling');
     // Commit the pinned starting geometry before changing the destination.
     character.getBoundingClientRect();

@@ -35,7 +35,8 @@ dialog::backdrop {
 }
 
 /* Piano modal title uses body font (matching project settings style),
-   NOT the chord font — stays consistent regardless of JazzText/Classical. */
+   NOT the chord font — stays consistent regardless of which chord font
+   the project has selected. */
 .piano-modal-shell .dialog-header h2 {
     margin: 0;
     font-family: var(--font-body);

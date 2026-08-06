@@ -30,6 +30,16 @@
     --fs-wedge-minor: .68rem;
 }
 
+#project-settings-dialog[data-chord-font="scifi"] {
+    --font-chord: var(--font-chord-scifi);
+    --font-chord-style: normal;
+    --font-chord-weight: 800;
+    /* Orbitron's wide geometric glyphs need an even smaller scale than
+       Edwin's to sit comfortably within the circle-of-fifths wedges. */
+    --fs-wedge-major: .82rem;
+    --fs-wedge-minor: .64rem;
+}
+
 .project-settings-shell {
     width: 100%;
     display: flex;

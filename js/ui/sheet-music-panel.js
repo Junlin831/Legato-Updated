@@ -8,12 +8,11 @@
  * externally (via project settings), the override is cleared so the panel
  * reflects the new source of truth.
  *
- * The transport and Tutor drawer are siblings inside <main class="sheet-
- * music-pane">; this module exposes their mount points for editor-view.
+ * The transport row is a sibling inside <main class="sheet-music-pane">;
+ * this module exposes its mount point for editor-view.
  */
 import { renderNotation } from '../sheet-music/render.js';
 import { createSheetMusicParticles } from '../sheet-music/particles.js';
-import { mountTenutino } from './tenutino.js';
 import { TEMPO_MIN, TEMPO_MAX } from '../state.js';
 import { icon } from './icons.js';
 
@@ -28,10 +27,13 @@ const WHEEL_DELTA_PAGE_PX = 800;
 
 const TEMPLATE = `
 <section class="notation-stage" aria-label="Progression notation">
-  <div class="sheet-music-zoom-control" role="group" aria-label="Zoom">
-    <button id="sheet-music-zoom-out" type="button" aria-label="Zoom out">${ icon('minus') }</button>
-    <output id="sheet-music-zoom-value" aria-live="polite">100%</output>
-    <button id="sheet-music-zoom-in" type="button" aria-label="Zoom in">${ icon('plus') }</button>
+  <div class="notation-stage-toolbar">
+    <button id="sheet-music-fast-return" class="sheet-music-fast-return" type="button" aria-label="Hold to speed up particles drifting back into place" title="Hold to speed up return">${ icon('fastForward') }</button>
+    <div class="sheet-music-zoom-control" role="group" aria-label="Zoom">
+      <button id="sheet-music-zoom-out" type="button" aria-label="Zoom out">${ icon('minus') }</button>
+      <output id="sheet-music-zoom-value" aria-live="polite">100%</output>
+      <button id="sheet-music-zoom-in" type="button" aria-label="Zoom in">${ icon('plus') }</button>
+    </div>
   </div>
   <div class="staff-glow" aria-hidden="true"></div>
   <div id="sheet-music-layer" class="sheet-music-layer">
@@ -62,7 +64,6 @@ const TEMPLATE = `
     </label>
   </div>
 </div>
-<div id="tutor-chat-mount"></div>
 `;
 
 export function mountSheetMusicPanel({ container, callbacks = {} }) {
@@ -77,15 +78,16 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   const notationStageEl = container.querySelector('.notation-stage');
   const particlesCanvas = container.querySelector('#sheet-music-particles');
   const particles = createSheetMusicParticles(particlesCanvas);
-  const tenutino = mountTenutino({
-    container: layerEl,
-    scrollContainer: notationStageEl,
-    callbacks: {
-      explain: (context) => callbacks.onTenutinoExplain?.(context),
-      suggest: (context) => callbacks.onTenutinoSuggest?.(context),
-      ask: (context) => callbacks.onTenutinoAsk?.(context),
-    },
-  });
+  const fastReturnBtn = container.querySelector('#sheet-music-fast-return');
+  // Hold-to-fast-forward: only meaningful while the button is actually
+  // pressed, so every way a press can end (mouse-up, drag-off, cancel) must
+  // release it — an event left unhandled would strand particles sped up.
+  const startFastReturn = () => particles.setFastReturn(true);
+  const stopFastReturn = () => particles.setFastReturn(false);
+  fastReturnBtn.addEventListener('pointerdown', startFastReturn);
+  fastReturnBtn.addEventListener('pointerup', stopFastReturn);
+  fastReturnBtn.addEventListener('pointerleave', stopFastReturn);
+  fastReturnBtn.addEventListener('pointercancel', stopFastReturn);
   const tempoSliderEl = container.querySelector('#sheet-music-tempo-slider');
   const tempoInputEl = container.querySelector('#sheet-music-tempo-input');
   const clefSelectEl = container.querySelector('#sheet-music-clef');
@@ -126,7 +128,6 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     if (!effectiveSettings) return { measureCount: 0, layout: [] };
     const result = renderNotation(sheetMusicEl, currentSegments, effectiveSettings, currentChords);
     particles.setSheetMusic(sheetMusicEl.querySelector('svg'), result.layout);
-    tenutino.setLayout(result.layout);
     applyActiveMeasureClasses();
     return result;
   }
@@ -151,7 +152,6 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     // the next line instead of compressing either bar's notation.
     layerEl.style.zoom = String(zoom);
     zoomValueEl.textContent = `${ Math.round(zoom * 100) }%`;
-    tenutino.setZoom(zoom);
     zoomOutBtn.disabled = zoom <= ZOOM_MIN + 1e-6;
     zoomInBtn.disabled = zoom >= ZOOM_MAX - 1e-6;
     // CSS `zoom` already changes this element's layout coordinate space. Keep
@@ -226,9 +226,7 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
 
   return {
     transportMount: container.querySelector('#transport-mount'),
-    tutorChatMount: container.querySelector('#tutor-chat-mount'),
     particles,
-    tenutino,
     render(segments, settings, chords = []) {
       currentSegments = segments;
       currentChords = chords;
@@ -255,6 +253,11 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
       window.removeEventListener('resize', scheduleRerender);
       panelResizeObserver?.disconnect();
       cancelAnimationFrame(resizeFrame);
+      fastReturnBtn.removeEventListener('pointerdown', startFastReturn);
+      fastReturnBtn.removeEventListener('pointerup', stopFastReturn);
+      fastReturnBtn.removeEventListener('pointerleave', stopFastReturn);
+      fastReturnBtn.removeEventListener('pointercancel', stopFastReturn);
+      particles.destroy();
     },
   };
 }

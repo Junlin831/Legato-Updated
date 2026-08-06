@@ -19,6 +19,7 @@
  */
 import { escapeHtml } from '../util/html.js';
 import { icon } from './icons.js';
+import { CHORD_FONTS, DEFAULT_CHORD_FONT } from '../state.js';
 
 const TEMPLATE = `
 <div class="landing-shell">
@@ -413,7 +414,8 @@ function emptyMessage(kind) {
 function applyCardTheme(card, project) {
   const theme = project.progression?.settings?.theme;
   if (theme?.accent) card.style.setProperty('--card-accent', theme.accent);
-  const chordFont = theme?.chordFont?.toLowerCase() === 'classical' ? 'classical' : 'jazztext';
+  const requested = theme?.chordFont?.toLowerCase();
+  const chordFont = CHORD_FONTS.includes(requested) ? requested : DEFAULT_CHORD_FONT;
   card.dataset.chordFont = chordFont;
   card.classList.toggle('is-classical-project', chordFont === 'classical');
 }

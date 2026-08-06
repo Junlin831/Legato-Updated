@@ -6,25 +6,25 @@
  * `<g>` group with `data-measure=<n>` — main.js toggles a `.is-playing` class
  * on that group during playback to light the current bar.
  *
- * User notes are drawn in `--ivory`; technique-generated notes in `--anchor`
- * (the accent color). Ties are drawn between adjacent segments that share a
- * `sourceId` (see rhythm.js), even across a barline. When that barline is a
- * system break, VexFlow's partial-tie form is used for each side; a normal
- * two-note tie would otherwise draw diagonally through the page.
+ * User notes are drawn in a cool lavender (the harmony); technique-generated
+ * notes in warm gold (the melody-adjacent, connective material — see the
+ * palette comment above `staffColor`). Ties are drawn between adjacent
+ * segments that share a `sourceId` (see rhythm.js), even across a barline.
+ * When that barline is a system break, VexFlow's partial-tie form is used
+ * for each side; a normal two-note tie would otherwise draw diagonally
+ * across the page.
  */
 import { vexKeyForNote, chordSpellingIdentity, formatChordSymbol } from '../engine/chords.js';
 import { accidentalFor } from '../engine/key-signature.js';
 import { decompose } from '../engine/rhythm.js';
-import { createParkourObstacle } from './parkour.js';
 
 /** SVG font families per theme chord font — same faces base.css declares. */
-const CHORD_SYMBOL_FAMILIES = { jazztext: 'MuseJazz Text', classical: 'Edwin' };
+const CHORD_SYMBOL_FAMILIES = { jazztext: 'MuseJazz Text', classical: 'Edwin', scifi: 'Orbitron' };
 
 const KEY_SIGNATURES = ['Cb', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#'];
 const DURATIONS = new Map([[4, 'w'], [3, 'hd'], [2, 'h'], [1, 'q'], [0.5, '8'], [0.25, '16']]);
-// The first system needs real space above it for Tenutino's jump. Previously
-// its resting position was clamped to y=4, so subtracting the parkour lift was
-// immediately clamped away and only later systems could visibly jump.
+// The first system needs real space above the top staff line so the topmost
+// system doesn't feel cramped against the panel edge.
 export const NOTATION_TOP_HEADROOM = 50;
 
 /** 'auto' picks bass or treble from the median MIDI note across all segments. */
@@ -140,10 +140,19 @@ export function renderNotation(container, segments, settings, chords = []) {
   // a desktop-sized SVG that leaves a visual gap at higher zoom levels.
   const width = Math.max(320, container.clientWidth || 820);
   const clef = resolvedClef(segments, settings.clef);
-  const staffColor = '#927a58';
-  const lineColor = '#69563f';
-  const userColor = '#e6ceaa';
-  const techniqueColor = '#d1a15a';
+  // Cosmic palette: staff/barlines read as cool glowing filaments. User chord
+  // tones sit in a saturated indigo-lavender; technique-generated (connective
+  // /transition) material gets a saturated cyan so it still stands apart from
+  // user notes at a glance, without reintroducing a warm tone into the
+  // notation itself — gold stays reserved for the --accent-driven "current
+  // position" glow elsewhere in this pane. Both stay well short of white:
+  // the particle layer (particles.js) additively blooms every sampled pixel,
+  // and near-white source colors saturate that bloom into one flat merged
+  // glow instead of visible individual particles.
+  const staffColor = '#8b90d6';
+  const lineColor = '#5a5fa8';
+  const userColor = '#8f93e8';
+  const techniqueColor = '#3ecbdc';
   const notesBySource = [];
   const layout = [];
   const measureLength = settings.timeSig.num * 4 / settings.timeSig.den;
@@ -156,7 +165,7 @@ export function renderNotation(container, segments, settings, chords = []) {
   // the same width as a whole-note bar.
   const chordById = new Map(chords.map((chord) => [chord.id, chord]));
   const symbolAttachedFor = new Set();
-  const symbolFamily = CHORD_SYMBOL_FAMILIES[settings.theme?.chordFont] ?? CHORD_SYMBOL_FAMILIES.jazztext;
+  const symbolFamily = CHORD_SYMBOL_FAMILIES[settings.theme?.chordFont] ?? CHORD_SYMBOL_FAMILIES.scifi;
   // A measure whose content is entirely silent is engraved as one centred
   // whole-bar rest, and a trailing partial measure is padded with rests so
   // the final bar reads complete instead of trailing off into blank staff.
@@ -374,7 +383,6 @@ export function renderNotation(container, segments, settings, chords = []) {
       staffTop: y + 40,
       lineGap: 10,
       timelineAnchors: [],
-      parkourObstacles: [],
     };
     layout.push(measureLayout);
     context.openGroup('measure-group', `measure-${ measure }`, { 'data-measure': String(measure) });
@@ -403,15 +411,6 @@ export function renderNotation(container, segments, settings, chords = []) {
         staveNotes,
         measureLength,
       );
-      // Rests have no noteheads for Tenutino to land on — skip them.
-      measureLayout.parkourObstacles = staveNotes
-        .filter((note) => !note.isRest?.())
-        .map((note) => createParkourObstacle(
-          note.getKeyProps?.() ?? [],
-          note.getAbsoluteX?.(),
-          measureLayout.lineGap,
-        ))
-        .filter(Boolean);
     }
     context.closeGroup();
   }

@@ -312,10 +312,8 @@ export function mountEditorPanel({ container, callbacks }) {
     const toggleLabel = selectedTechnique
       ? `${ escapeHtml(selectedTechnique.name) } · ${ formatBeatCost(selectedTechnique.beatCost) }`
       : `${ icon('plus', 'transition-label-icon') } Add transition`;
-    seam.innerHTML = `<div class="transition-connector"><button class="transition-toggle" type="button" aria-expanded="${ isOpen }"><span class="transition-rule" aria-hidden="true"></span><span class="transition-label">${ toggleLabel }</span><span class="transition-rule" aria-hidden="true"></span></button><button class="transition-explain" type="button" title="Explain this transition" aria-label="Explain the transition from ${ fromName } to ${ toName }">Explain</button></div>${ isOpen ? `<div class="transition-editor"><div class="transition-editor-copy"><small>${ budget } beat${ budget === 1 ? '' : 's' } available in the departing tail</small></div><label>Technique <select class="transition-select" aria-label="Technique for ${ fromName } to ${ toName }"></select></label></div>` : '' }`;
+    seam.innerHTML = `<div class="transition-connector"><button class="transition-toggle" type="button" aria-expanded="${ isOpen }"><span class="transition-rule" aria-hidden="true"></span><span class="transition-label">${ toggleLabel }</span><span class="transition-rule" aria-hidden="true"></span></button></div>${ isOpen ? `<div class="transition-editor"><div class="transition-editor-copy"><small>${ budget } beat${ budget === 1 ? '' : 's' } available in the departing tail</small></div><label>Technique <select class="transition-select" aria-label="Technique for ${ fromName } to ${ toName }"></select></label></div>` : '' }`;
     const toggle = seam.querySelector('.transition-toggle');
-    // Same flow as Tenutino's "Explain this", but pinned to this exact seam.
-    seam.querySelector('.transition-explain').onclick = () => callbacks.onExplainSeam(index);
     toggle.onclick = () => {
       if (isOpen) {
         expandedSeamIndexes.delete(index);
@@ -388,11 +386,8 @@ export function mountEditorPanel({ container, callbacks }) {
     const el = document.createElement('div');
     el.className = 'empty-state';
     el.innerHTML = `
-      <div class="empty-state-illustration" aria-hidden="true">
-        <img src="/assets/tenutino/tenutino.png" alt="" draggable="false">
-      </div>
       <div class="empty-state-copy">
-        <h3 class="empty-state-headline">Tenutino is waiting.</h3>
+        <h3 class="empty-state-headline">Nothing here yet.</h3>
         <p class="empty-state-subcopy">Add a chord to begin!</p>
       </div>
     `;

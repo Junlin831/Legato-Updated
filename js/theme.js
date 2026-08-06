@@ -6,12 +6,12 @@
  *   - accent hex     → CSS `--accent`  (drives all accent-tinted UI; other
  *                      panels derive translucent variants via color-mix)
  *   - chordFont      → attribute `data-chord-font` on <html> ('jazztext' |
- *                      'classical'); base.css swaps --font-chord and the
- *                      matching weight/style off this attribute.
+ *                      'classical' | 'scifi'); base.css swaps --font-chord
+ *                      and the matching weight/style off this attribute.
  *
  * editor-view calls applyTheme on mount and whenever project settings change,
  * and clearTheme on unmount so the landing page falls back to the base.css
- * defaults (Amber + JazzText).
+ * defaults (Amber + Sci-Fi).
  */
 
 /** @param {import('./state.js').Theme} theme */

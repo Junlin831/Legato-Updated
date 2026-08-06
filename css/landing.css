@@ -491,6 +491,12 @@
     --font-chord-weight: 700
 }
 
+.landing-card[data-chord-font="scifi"] {
+    --font-chord: var(--font-chord-scifi);
+    --font-chord-style: normal;
+    --font-chord-weight: 800
+}
+
 /* Landing cards can show both font modes at once, independent of the
    document-level theme that was active in the last-opened project. */
 .landing-card.is-classical-project .landing-card-name {

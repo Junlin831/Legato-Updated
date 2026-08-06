@@ -1,16 +1,34 @@
 /* Right-side sheet music surface: particle stage with corner zoom control,
    VexFlow SVG layer, progress rail, and a shared transport row that hosts
    play/stop plus temporary tempo/clef overrides on the right. Owns everything
-   inside <main class="sheet-music-pane"> except the coach panel. */
+   inside <main class="sheet-music-pane">. */
 
 .sheet-music-pane {
+    /* Cosmic palette — scoped to this pane only. The rest of the app keeps
+       the warm "sand hologram" tokens from base.css; the score surface gets
+       its own deep-space atmosphere so it reads as a window into something
+       vast rather than another editorial panel. --accent stays in play
+       (still the per-project accent) for anything that marks "current" —
+       playhead, active measure, progress rail — so gold/amber keeps meaning
+       "this is where we are right now" exactly like it does elsewhere. */
+    --cosmos-void: #05040f;
+    --cosmos-deep: #0a0824;
+    --cosmos-nebula-violet: #6a4fc4;
+    --cosmos-nebula-blue: #3a6ea8;
+    --cosmos-hairline: rgba(158, 168, 235, .16);
+    --cosmos-star: #e4e8ff;
+    --cosmos-chip: rgba(16, 14, 30, .68);
+
     min-width: 0;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     container-type: inline-size;
     padding: 34px clamp(28px, 4vw, 68px) 34px;
-    background: radial-gradient(circle at 75% 20%, color-mix(in srgb, var(--accent) 3.5%, transparent), transparent 35%), var(--ink)
+    background:
+        radial-gradient(ellipse 820px 520px at 80% 6%, color-mix(in srgb, var(--cosmos-nebula-violet) 16%, transparent), transparent 62%),
+        radial-gradient(ellipse 680px 480px at 10% 92%, color-mix(in srgb, var(--cosmos-nebula-blue) 14%, transparent), transparent 60%),
+        var(--cosmos-void)
 }
 
 /* Transport row: play/stop + status on the left, tempo/clef overrides pinned
@@ -69,18 +87,59 @@
     }
 }
 
-.sheet-music-zoom-control {
+/* Groups the fast-return button and the zoom pill in the stage's top-right
+   corner so they lay out with a consistent gap instead of each needing its
+   own hardcoded offset. */
+.notation-stage-toolbar {
     position: absolute;
     z-index: 6;
     top: 18px;
     right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px
+}
+
+.sheet-music-fast-return {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--hairline);
+    border-radius: 50%;
+    background: var(--cosmos-chip);
+    backdrop-filter: blur(6px);
+    color: var(--tan);
+    cursor: pointer;
+    transition: color .18s, background .18s, border-color .18s
+}
+
+.sheet-music-fast-return:hover,
+.sheet-music-fast-return:focus-visible,
+.sheet-music-fast-return:active {
+    color: var(--ivory);
+    border-color: var(--accent-border);
+    background: color-mix(in srgb, var(--accent) 16%, var(--cosmos-chip))
+}
+
+.sheet-music-fast-return:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px
+}
+
+.sheet-music-fast-return .ui-icon {
+    width: 16px;
+    height: 16px
+}
+
+.sheet-music-zoom-control {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     padding: 5px;
     border: 1px solid var(--hairline);
     border-radius: var(--radius-pill);
-    background: rgba(23, 18, 14, .68);
+    background: var(--cosmos-chip);
     backdrop-filter: blur(6px)
 }
 
@@ -120,10 +179,10 @@
     letter-spacing: .06em
 }
 
-/* Notation stage — the notation remains semantic VexFlow, while this layer
-   gives the compiled material a restrained sand-hologram presence. Grows
-   to fill the vertical space of the sheet-music pane so the sheet occupies
-   the full right column instead of hugging the top. */
+/* Notation stage — the notation remains semantic VexFlow, floated over a
+   deep-space atmosphere instead of a printed page. Grows to fill the
+   vertical space of the sheet-music pane so the sheet occupies the full
+   right column instead of hugging the top. */
 .notation-stage {
     position: relative;
     --sheet-music-progress: 0%;
@@ -133,18 +192,43 @@
     padding: 64px 0 48px;
     display: flex;
     align-items: center;
-    border: 1px solid rgba(196, 167, 126, .11);
+    border: 1px solid var(--cosmos-hairline);
     border-radius: var(--radius-card);
     background:
-        linear-gradient(90deg, color-mix(in srgb, var(--accent) 2.5%, transparent) 1px, transparent 1px) 0 0 / 64px 100%,
-        radial-gradient(ellipse at 24% 46%, color-mix(in srgb, var(--accent) 7.5%, transparent), transparent 34%),
-        linear-gradient(180deg, rgba(23, 18, 14, .24), rgba(5, 4, 3, .08));
+        radial-gradient(ellipse at 24% 46%, color-mix(in srgb, var(--cosmos-nebula-violet) 12%, transparent), transparent 40%),
+        radial-gradient(ellipse at 82% 78%, color-mix(in srgb, var(--cosmos-nebula-blue) 10%, transparent), transparent 42%),
+        linear-gradient(180deg, rgba(6, 5, 16, .5), rgba(2, 2, 8, .22));
     box-shadow:
-        inset 0 1px rgba(230, 206, 170, .035),
-        inset 0 -1px rgba(0, 0, 0, .32);
+        inset 0 1px rgba(200, 210, 255, .04),
+        inset 0 -1px rgba(0, 0, 0, .4);
     overflow: auto;
     scrollbar-width: thin;
-    scrollbar-color: rgba(196, 167, 126, .28) transparent
+    scrollbar-color: var(--cosmos-hairline) transparent
+}
+
+/* Faint scattered starfield, tiled behind the notation. Kept low-opacity and
+   static (no twinkle animation) so it reads as ambient depth rather than
+   competing with the particle system for attention. */
+.notation-stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+        radial-gradient(1px 1px at 8% 18%, var(--cosmos-star), transparent),
+        radial-gradient(1px 1px at 22% 64%, var(--cosmos-star), transparent),
+        radial-gradient(1.4px 1.4px at 38% 12%, var(--cosmos-star), transparent),
+        radial-gradient(1px 1px at 52% 46%, var(--cosmos-star), transparent),
+        radial-gradient(1.4px 1.4px at 67% 82%, var(--cosmos-star), transparent),
+        radial-gradient(1px 1px at 78% 28%, var(--cosmos-star), transparent),
+        radial-gradient(1px 1px at 91% 58%, var(--cosmos-star), transparent),
+        radial-gradient(1.4px 1.4px at 14% 90%, var(--cosmos-star), transparent),
+        radial-gradient(1px 1px at 61% 6%, var(--cosmos-star), transparent),
+        radial-gradient(1px 1px at 96% 88%, var(--cosmos-star), transparent);
+    background-repeat: repeat;
+    background-size: 420px 260px;
+    opacity: .38
 }
 
 .notation-stage::before {
@@ -154,8 +238,8 @@
     z-index: 0;
     pointer-events: none;
     background:
-        linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 16px) top left / 42px 42px no-repeat,
-        linear-gradient(315deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 16px) bottom right / 42px 42px no-repeat;
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 16px) top left / 42px 42px no-repeat,
+        linear-gradient(315deg, color-mix(in srgb, var(--accent) 11%, transparent), transparent 16px) bottom right / 42px 42px no-repeat;
     opacity: .55
 }
 
@@ -263,7 +347,7 @@
     bottom: 0;
     height: 2px;
     overflow: hidden;
-    background: rgba(196, 167, 126, .055);
+    background: var(--cosmos-hairline);
     pointer-events: none
 }
 
@@ -272,7 +356,7 @@
     display: block;
     width: var(--sheet-music-progress);
     height: 100%;
-    background: linear-gradient(90deg, rgba(122, 102, 75, .22), var(--accent));
+    background: linear-gradient(90deg, color-mix(in srgb, var(--cosmos-nebula-blue) 45%, transparent), var(--accent));
     box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 46%, transparent);
     transition: width 80ms linear
 }
@@ -343,7 +427,7 @@
         padding-top: 56px
     }
 
-    .sheet-music-zoom-control {
+    .notation-stage-toolbar {
         top: 12px;
         right: 12px
     }

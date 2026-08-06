@@ -6,11 +6,11 @@
    Type system (two tiers, per the design revamp):
      --font-body   Space Grotesk. Every UI label, section heading, body copy,
                    kicker, and metadata value.
-     --font-chord  Playful/display, RESERVED for chord symbols and project
+     --font-chord  Display face RESERVED for chord symbols and project
                    titles. Switches per project via [data-chord-font] on
-                   <html> — jazztext (default) uses MuseJazz Text, classical
-                   uses Edwin italic. Both are self-hosted from /fonts (SIL
-                   OFL, sourced from the MuseScore repo).
+                   <html> — scifi (default) uses Orbitron, jazztext uses
+                   MuseJazz Text, classical uses Edwin italic. All three are
+                   self-hosted from /fonts under OFL.
 
    Accent color is per-project. --accent is set at runtime by editor-view
    when a project mounts, cleared on unmount. The two derived aliases give
@@ -58,20 +58,30 @@
     font-display: swap
 }
 
+@font-face {
+    font-family: 'Orbitron';
+    src: url('/fonts/Orbitron-Bold.woff2') format('woff2');
+    font-weight: 700 800;
+    font-style: normal;
+    font-display: swap
+}
+
 :root {
-    /* Surfaces, darkest → lightest. */
-    --ink: #141210;
-    --panel: #16130F;
-    --panel-2: #1E1912;
-    --panel-3: #231E14;
-    --panel-4: #271F16;
+    /* Surfaces, darkest → lightest. Cool indigo scale — matches the cosmic
+       treatment on the sheet-music surface so the workspace and the score
+       read as one material instead of two conflicting palettes. */
+    --ink: #100E1E;
+    --panel: #130F22;
+    --panel-2: #1B1730;
+    --panel-3: #201B3A;
+    --panel-4: #241F42;
 
     /* Text on dark surfaces. --tan sits between ivory (primary) and tan-dim
        (secondary/labels); used mainly for filled-pill tag copy. */
     --ivory: #F5EEDF;
     --tan: #E9D9BE;
     --tan-dim: #A6987F;
-    --hairline: rgba(240, 225, 195, .08);
+    --hairline: rgba(200, 205, 245, .09);
 
     --danger: #d97a70;
 
@@ -86,9 +96,10 @@
     --font-body: 'Space Grotesk', sans-serif;
     --font-chord-jazz: 'MuseJazz Text', 'Comic Sans MS', cursive;
     --font-chord-classical: 'Edwin', Georgia, 'Times New Roman', serif;
-    --font-chord: var(--font-chord-jazz);
+    --font-chord-scifi: 'Orbitron', 'Space Grotesk', sans-serif;
+    --font-chord: var(--font-chord-scifi);
     --font-chord-style: normal;
-    --font-chord-weight: 700;
+    --font-chord-weight: 800;
 
     /* Small-text scale for tan-dim helper text. Space Grotesk reads smaller
        than the previous mono at the same rem, so these tokens centralize
@@ -114,8 +125,14 @@
 }
 
 /* Chord-font toggle. Set by editor-view via document.documentElement.dataset
-   .chordFont. Also affects style/weight because Edwin's shipped weight is
-   italic-only. */
+   .chordFont. Style/weight vary per face — Edwin's shipped weight is
+   bold-only, Orbitron (the default, scifi) only ships 700/800. */
+:root[data-chord-font="jazztext"] {
+    --font-chord: var(--font-chord-jazz);
+    --font-chord-style: normal;
+    --font-chord-weight: 700
+}
+
 :root[data-chord-font="classical"] {
     --font-chord: var(--font-chord-classical);
     --font-chord-style: normal;

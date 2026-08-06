@@ -163,9 +163,9 @@ function syncMeterOptions(select, meterType, selected) {
   METER_OPTIONS[meterType].forEach((label) => select.add(new Option(label, label, false, label === selected)));
 }
 
-// Labels for the two chord-font modes. Kept next to the picker (not in state.js)
+// Labels for the chord-font modes. Kept next to the picker (not in state.js)
 // because they are UI copy, not part of the persistence contract.
-const CHORD_FONT_LABELS = { jazztext: 'JazzText', classical: 'Classical' };
+const CHORD_FONT_LABELS = { jazztext: 'JazzText', classical: 'Classical', scifi: 'Sci-Fi' };
 
 function renderAccentPicker(dialog) {
   const container = dialog.querySelector('#project-settings-accent-picker');

@@ -383,7 +383,7 @@ Suggested demonstration sequence:
 2. Select one block-chord technique, such as `secondaryDom`, and replay.
 3. Open the coach explanation and show all four educational fields.
 4. Open Suggestions to show one focused alternative and its reason.
-5. Ask Tenutino a follow-up and show its natural conversational answer.
+5. Ask a follow-up question and show its natural conversational answer.
 6. Try the suggestion, replay, and compare.
 
 Do not claim that one transition is universally “better.” Describe how the musical effect changes and let the pianist compare alternatives.

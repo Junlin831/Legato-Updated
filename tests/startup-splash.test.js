@@ -14,7 +14,7 @@ import {
 } from '../js/ui/startup-splash.js';
 import { SUPPORT_MESSAGES, pickSupportMessage } from '../js/data/support-messages.js';
 
-test('startup splash waits 1.5 seconds before blacking out around Tenutino', async () => {
+test('startup splash waits 1.5 seconds before blacking out around the character', async () => {
   const waits = [];
   const classes = new Set();
   const splash = { classList: { add: (name) => classes.add(name) } };
@@ -49,18 +49,13 @@ test('reduced motion keeps the 1.5 second message but skips transition delays', 
   assert.deepEqual(waits, [STARTUP_SPLASH_DURATION_MS]);
 });
 
-test('handoff prefers the laid-out editor companion over the brand fallback', () => {
-  const editorTarget = {};
+test('handoff target resolves to the destination view brand mark', () => {
   const brandTarget = {};
-  const root = {
-    querySelector(selector) {
-      return selector.startsWith('.tenutino-root') ? editorTarget : brandTarget;
-    },
-  };
-  assert.equal(queryStartupHandoffTarget(root), editorTarget);
-
-  root.querySelector = (selector) => selector.startsWith('.tenutino-root') ? null : brandTarget;
+  const root = { querySelector: () => brandTarget };
   assert.equal(queryStartupHandoffTarget(root), brandTarget);
+
+  root.querySelector = () => null;
+  assert.equal(queryStartupHandoffTarget(root), null);
 });
 
 test('handoff travel stays slow but bounded across screen sizes', () => {

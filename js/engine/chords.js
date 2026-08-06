@@ -109,10 +109,10 @@ export function noteName(midi, key = 0, withOctave = true) {
  * When a hint is available, the note list is spelled with the chord's letters
  * so a G♯ major reads "G♯4 · B♯4 · D♯5" instead of "G♯4 · C5 · D♯5".
  *
- * Plain-text label — for the coach panel, the coach API payload, and any
- * other consumer that can't render superscripts. UI surfaces that render
- * chord glyphs (editor rows, quick-add chips) should call
- * `formatChordSymbol` instead so extensions display in idiomatic superscript.
+ * Plain-text label — for any consumer that can't render superscripts. UI
+ * surfaces that render chord glyphs (editor rows, quick-add chips) should
+ * call `formatChordSymbol` instead so extensions display in idiomatic
+ * superscript.
  */
 export function chordDisplayName(chord, key = 0) {
   if (chord.rest || !chord.notes.length) return 'Rest';

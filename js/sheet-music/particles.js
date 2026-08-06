@@ -17,11 +17,36 @@
 const DESKTOP_PARTICLES = 48000;
 const COMPACT_PARTICLES = 20000;
 const MAX_DPR           = 3;
-const GOLD              = [209, 161, 90];
+// Fallback-dot color before a real SVG sample lands — matches render.js's
+// userColor so the transient scaffold blends into the same cosmic palette
+// the assembled notation renders in.
+const HARMONY_TINT       = [143, 147, 232];
 const SAMPLE_CACHE_LIMIT = 3;
+// Dislodge — the pointer leaves a short trail of timestamped "touch" impulses
+// (position + the direction the pointer was travelling at that instant).
+// Each impulse's effect is purely a function of its own age: a quick rise as
+// the hand passes through, a brief hold, then a slow decay back to nothing —
+// independent of where the pointer currently is. That's what makes a touch
+// keep drifting under its own momentum instead of being a field that
+// snaps back the instant the cursor moves elsewhere.
+// The trail is a fixed-size ring buffer — a new touch always recycles
+// whichever slot was written longest ago (plain least-recently-used, the
+// same thing round-robin index cycling gives you). For that recycled slot to
+// never visibly interrupt anything, it needs to have already finished
+// decaying by the time its turn comes back around, which means:
+// TRAIL_SIZE * (time between stamps) should safely exceed one impulse's
+// full lifespan (RISE + HOLD + ~4 * DECAY). The constants below are tuned
+// to satisfy that under fast, continuous pointer movement.
+const DISLODGE_TRAIL_SIZE   = 48;
+const DISLODGE_RISE_S       = 0.2;   // time to reach peak displacement
+const DISLODGE_HOLD_S       = 0.22;  // stays near peak before decay begins
+const DISLODGE_DECAY_S      = 0.8;   // time-constant of the fade-out
+const DISLODGE_STAMP_PX     = 12;    // min pointer movement between new impulses
+const DISLODGE_STAMP_MS     = 55;    // min time between new impulses, regardless of speed
+const FAST_RETURN_SPEED     = 5.5;
 
 // Central diagnostic switch. Keep this available so particle rendering can be
-// isolated again during profiling without changing the score or Tenutino.
+// isolated again during profiling without changing the rest of the score.
 export const PARTICLE_EFFECTS_ENABLED = true;
 
 const clamp = (v, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v));
@@ -34,9 +59,11 @@ const ease  = (t) => 1 - (1 - clamp(t)) ** 3;
 // project font. Embedding the face as a data: URI inside the serialized
 // markup keeps both layers identical. Fetched once per family, then cached.
 const FONT_SOURCES = new Map([
-  ['MuseJazz Text', { url: '/fonts/MuseJazzText.otf', weight: '400 700' }],
-  ['Edwin', { url: '/fonts/Edwin-Bold.otf', weight: '700' }],
+  ['MuseJazz Text', { url: '/fonts/MuseJazzText.otf', weight: '400 700', format: 'opentype' }],
+  ['Edwin', { url: '/fonts/Edwin-Bold.otf', weight: '700', format: 'opentype' }],
+  ['Orbitron', { url: '/fonts/Orbitron-Bold.woff2', weight: '700 800', format: 'woff2' }],
 ]);
+const FONT_MIME = { opentype: 'font/otf', woff2: 'font/woff2' };
 const fontDataUris = new Map();
 
 async function fontFaceStyleFor(svg) {
@@ -49,27 +76,29 @@ async function fontFaceStyleFor(svg) {
   for (const family of families) {
     if (!fontDataUris.has(family)) {
       try {
-        const buffer = await (await fetch(FONT_SOURCES.get(family).url)).arrayBuffer();
+        const source = FONT_SOURCES.get(family);
+        const buffer = await (await fetch(source.url)).arrayBuffer();
         const bytes = new Uint8Array(buffer);
         let binary = '';
         for (let i = 0; i < bytes.length; i += 0x8000) {
           binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         }
-        fontDataUris.set(family, `data:font/otf;base64,${ btoa(binary) }`);
+        const mime = FONT_MIME[source.format] ?? 'font/otf';
+        fontDataUris.set(family, `data:${ mime };base64,${ btoa(binary) }`);
       } catch {
         fontDataUris.set(family, null); // fetch failed: fall back silently
       }
     }
     const uri = fontDataUris.get(family);
     if (uri) {
-      const { weight } = FONT_SOURCES.get(family);
-      rules.push(`@font-face{font-family:'${ family }';src:url('${ uri }') format('opentype');font-weight:${ weight };}`);
+      const { weight, format } = FONT_SOURCES.get(family);
+      rules.push(`@font-face{font-family:'${ family }';src:url('${ uri }') format('${ format }');font-weight:${ weight };}`);
     }
   }
   return rules.length ? `<style>${ rules.join('') }</style>` : '';
 }
 
-/** Use the same musical coordinate as Tenutino: measure + progress in it. */
+/** Playback position expressed as measure index + progress within it. */
 export function particlePlayhead(measureIndex, measureProgress, layoutLength, globalProgress = 0) {
   if (Number.isInteger(measureIndex) && measureIndex >= 0) {
     return measureIndex + clamp(Number(measureProgress) || 0);
@@ -172,6 +201,8 @@ const VERT = /* glsl */`
 precision highp float;
 ${SIMPLEX}
 
+#define DISLODGE_N ${DISLODGE_TRAIL_SIZE}
+
 uniform float uTime;
 uniform float uBass;
 uniform float uEnergy;
@@ -185,6 +216,13 @@ uniform float uMotionStrength;
 uniform float uPointerActive;
 uniform float uPointerRadius;
 uniform vec2  uPointer;
+// Dislodge trail: each impulse is where the pointer touched and which way it
+// was heading. Unused slots carry a time far in the past so their response
+// curve (below) naturally evaluates to zero without any dynamic branching.
+uniform vec2  uDislodgePos[DISLODGE_N];
+uniform vec2  uDislodgeDir[DISLODGE_N];
+uniform float uDislodgeTime[DISLODGE_N];
+uniform float uReturnSpeed; // 1.0 normal drift-back rate; >1 fast-forwards it
 
 attribute float aSeed;
 attribute float aTimeline;
@@ -251,6 +289,57 @@ void main() {
     uPointerRadius,
     distance(pos.xy, uPointer)
   ));
+
+  // ── Dislodge ─────────────────────────────────────────────────────
+  // Not a field that tracks the live cursor (that read as "avoiding the
+  // mouse" and snapped back the instant the cursor moved elsewhere). Instead
+  // the pointer leaves a trail of touch impulses; each one's effect is a
+  // function of *its own age only* — a quick rise, a brief hold, then a slow
+  // independent decay — so a particle keeps drifting on its own timeline
+  // whether or not the pointer is still anywhere nearby. Direction blends
+  // "pushed away from the touch point" with "pushed the way the hand was
+  // moving," which is what makes it read as a shove rather than a repulsion
+  // field radiating from a point.
+  //
+  // Multiple overlapping impulses are combined as a weighted average (not a
+  // sum, which exploded when several impulses overlapped, and not a hard
+  // max, which caused visible discontinuities whenever the strongest
+  // candidate flipped between two competing impulses frame to frame). A
+  // weighted average changes smoothly as weights shift, and clamping the
+  // total keeps it bounded regardless of how many impulses overlap.
+  float reach = uPointerRadius * 0.95;
+  vec2  dirSum = vec2(0.0);
+  float weightSum = 0.0;
+  for (int i = 0; i < DISLODGE_N; i++) {
+    float age = (uTime - uDislodgeTime[i]) * uReturnSpeed;
+    float attack = 1.0 - exp(-age / ${DISLODGE_RISE_S.toFixed(2)});
+    float decay = exp(-max(0.0, age - ${DISLODGE_HOLD_S.toFixed(2)}) / ${DISLODGE_DECAY_S.toFixed(2)});
+    float response = attack * decay;
+    vec2  toParticle = pos.xy - uDislodgePos[i];
+    float d = length(toParticle) + 0.001;
+    float falloff = 1.0 - smoothstep(0.0, reach, d);
+    float weight = response * falloff;
+    vec2  pushDir = normalize(mix(toParticle / d, uDislodgeDir[i], 0.55));
+    dirSum += pushDir * weight;
+    weightSum += weight;
+  }
+  vec2  avgDir = weightSum > 0.0005 ? dirSum / weightSum : vec2(0.0);
+  float influence = clamp(weightSum, 0.0, 1.0);
+
+  // Per-particle magnitude variance keeps neighbours from moving in perfect
+  // lockstep — reads as individual particles drifting apart, not one surface.
+  float indivStrength = 0.55 + s2 * 0.9;
+  vec2 drift = avgDir * influence * indivStrength * 34.0;
+
+  // Small persistent wobble while drifting, like two like charges that repel
+  // but never quite settle — amplitude scales with influence so it vanishes
+  // once fully assembled again instead of adding noise everywhere.
+  vec2 wobble = vec2(
+    snoise(vec3(aSeed * 0.08, uTime * 1.7, 0.0)),
+    snoise(vec3(aSeed * 0.08 + 40.0, uTime * 1.7, 7.0))
+  ) * influence * 5.0;
+
+  pos.xy += (drift + wobble) * uMotionStrength;
 
   // Subtle z pulsation (visible in perspective-free ortho as size modulation)
   pos.z  = snoise(vec3(pos.x * 0.0026, pos.y * 0.0026, uTime * 0.09)) * 1.4
@@ -324,7 +413,11 @@ void main() {
   float soft = t.a * t.a;
   vec3 col = max(vCol * (0.72 + vBright * 0.48), vec3(0.0));
   col = pow(col, vec3(1.0 / max(1.0, uColorBoost)));
-  col = clamp(col + vec3(0.10, 0.065, 0.025), vec3(0.0), vec3(1.65));
+  // A small neutral-cool boost instead of the old warm-amber one: most
+  // particles now sample the cool lavender harmony color, and a warm additive
+  // tint here would muddy that toward brown. Gold (technique/melody) material
+  // still reads warm because its sampled vCol already carries that hue.
+  col = clamp(col + vec3(0.05, 0.055, 0.09), vec3(0.0), vec3(1.65));
   gl_FragColor = vec4(col, soft * vAlpha * uBloomAlpha * (0.76 + vCoverage * 0.24));
 }
 `;
@@ -376,6 +469,7 @@ export function createSheetMusicParticles(canvas) {
       settle() {
         stage?.style.setProperty('--sheet-music-progress', '0%');
       },
+      setFastReturn() {},
       destroy() {},
     };
   }
@@ -386,7 +480,7 @@ export function createSheetMusicParticles(canvas) {
     return {
       setSheetMusic() { return Promise.resolve(false); },
       ready() { return Promise.resolve(false); },
-      beginPlayback() {}, setProgress() {}, settle() {}, destroy() {},
+      beginPlayback() {}, setProgress() {}, settle() {}, setFastReturn() {}, destroy() {},
     };
   }
 
@@ -436,22 +530,39 @@ export function createSheetMusicParticles(canvas) {
   const uPointerRadius  = { value: compact ? 82 : 112 };
   const uPointer        = { value: new T.Vector2(-10000, -10000) };
   const uColorBoost     = { value: 1.28 };
+  // Dislodge trail. Slots start far in the past so they contribute nothing
+  // (see the response curve in VERT) until the pointer actually touches the
+  // sheet. dislodgePositions/dislodgeDirs are mutated in place on pointer
+  // move; Three.js re-reads the current component values each frame.
+  const dislodgePositions = Array.from({ length: DISLODGE_TRAIL_SIZE }, () => new T.Vector2(-10000, -10000));
+  const dislodgeDirs = Array.from({ length: DISLODGE_TRAIL_SIZE }, () => new T.Vector2(0, 0));
+  const dislodgeTimes = new Array(DISLODGE_TRAIL_SIZE).fill(-1000);
+  const uDislodgePos  = { value: dislodgePositions };
+  const uDislodgeDir  = { value: dislodgeDirs };
+  const uDislodgeTime = { value: dislodgeTimes };
+  const uReturnSpeed  = { value: 1 };
 
   // Main pass (normal blending, tight point size)
   const mainUniforms = {
     uTime, uBass, uEnergy, uPlayhead, uScatterT,
     uCanvasW, uCanvasH, uPixelRatio, uDotTex,
     uMotionStrength, uPointerActive, uPointerRadius, uPointer, uColorBoost,
+    uDislodgePos, uDislodgeDir, uDislodgeTime, uReturnSpeed,
     uBloomMult:  { value: 1.0 },
   };
 
-  // Bloom pass (additive blending, enlarged points for soft halo)
+  // Bloom pass (additive blending, enlarged points for soft halo). Kept
+  // tighter/dimmer than the original warm-palette tuning: the cosmic colors
+  // sit closer to white already, and additive overlap between neighbouring
+  // halos saturates to a flat merged glow much faster than it did against
+  // the old warmer, lower-luminance palette.
   const bloomUniforms = {
     uTime, uBass, uEnergy, uPlayhead, uScatterT,
     uCanvasW, uCanvasH, uPixelRatio, uDotTex,
     uMotionStrength, uPointerActive, uPointerRadius, uPointer, uColorBoost,
-    uBloomMult:  { value: 1.85 },
-    uBloomAlpha: { value: 0.14 },
+    uDislodgePos, uDislodgeDir, uDislodgeTime, uReturnSpeed,
+    uBloomMult:  { value: 1.45 },
+    uBloomAlpha: { value: 0.1 },
   };
 
   const matBase = {
@@ -609,7 +720,7 @@ export function createSheetMusicParticles(canvas) {
           list.push({
             x,
             y: m.staffTop + line * m.lineGap,
-            color: GOLD, seed,
+            color: HARMONY_TINT, seed,
             timeline: m.index + musicalProgress,
             measure: m.index,
             coverage: 1,
@@ -881,19 +992,60 @@ export function createSheetMusicParticles(canvas) {
     }
   }
 
+  let lastDislodgeX = null;
+  let lastDislodgeY = null;
+  let lastDislodgeStampAt = -Infinity;
+  // Points at the slot that will be overwritten next. Always advancing this
+  // by exactly one on every stamp — never "whichever slot looks weakest
+  // right now" — guarantees a slot can't be picked again until every other
+  // slot has had a turn first. A response-based "pick the weakest" approach
+  // was tried and broke: a slot's response curve is 0 both before it rises
+  // AND after it decays, so a slot written a moment ago (still rising) reads
+  // as just as "weak" as one that's fully faded — new touches kept picking
+  // (and immediately overwriting) the slot they'd *just* written instead of
+  // an actually-finished one, which meant touching a new area never
+  // accumulated enough impulses to become visible.
+  let dislodgeWriteIndex = 0;
+
   function handlePointerMove(event) {
     if (rm) return;
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    uPointer.value.set(
-      (event.clientX - rect.left) * cW / rect.width,
-      cH - (event.clientY - rect.top) * cH / rect.height,
-    );
+    const x = (event.clientX - rect.left) * cW / rect.width;
+    const y = cH - (event.clientY - rect.top) * cH / rect.height;
+    uPointer.value.set(x, y);
     uPointerActive.value = 1;
+
+    let dx = 0, dy = 0, moved = 0;
+    if (lastDislodgeX != null) {
+      dx = x - lastDislodgeX;
+      dy = y - lastDislodgeY;
+      moved = Math.hypot(dx, dy);
+      // Throttled by both distance AND time: distance alone doesn't cap a
+      // fast sweep's stamp *rate*, which is what determines how much of the
+      // trail's lifespan (TRAIL_SIZE slots) a burst of movement consumes.
+      if (moved < DISLODGE_STAMP_PX || performance.now() - lastDislodgeStampAt < DISLODGE_STAMP_MS) return;
+    }
+    lastDislodgeX = x;
+    lastDislodgeY = y;
+    lastDislodgeStampAt = performance.now();
+
+    const slot = dislodgeWriteIndex;
+    dislodgeWriteIndex = (dislodgeWriteIndex + 1) % DISLODGE_TRAIL_SIZE;
+    dislodgeDirs[slot].set(moved > 0 ? dx / moved : 0, moved > 0 ? dy / moved : 0);
+    dislodgePositions[slot].set(x, y);
+    dislodgeTimes[slot] = uTime.value;
   }
 
   function handlePointerLeave() {
     uPointerActive.value = 0;
+    lastDislodgeX = null;
+    lastDislodgeY = null;
+  }
+
+  /** Held down, this fast-forwards any particles currently drifting back. */
+  function setFastReturn(active) {
+    uReturnSpeed.value = active ? FAST_RETURN_SPEED : 1;
   }
 
   mq.addEventListener?.('change', handleMotionPreferenceChange);
@@ -926,5 +1078,5 @@ export function createSheetMusicParticles(canvas) {
   syncCamera();
   ensureLoop();
 
-  return { setSheetMusic, ready, beginPlayback, setProgress, settle, destroy };
+  return { setSheetMusic, ready, beginPlayback, setProgress, settle, setFastReturn, destroy };
 }

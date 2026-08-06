@@ -26,6 +26,7 @@ const ICONS = Object.freeze({
   density: '<path d="M5 6h14M5 12h14M5 18h14"/>',
   // Whole rest: a filled block hanging beneath a staff line.
   rest: '<path d="M4 9h16"/><rect x="9" y="9" width="6" height="4.5" rx="0.5" fill="currentColor" stroke="none"/>',
+  fastForward: '<path fill="currentColor" stroke="none" d="M3 6.5v11l8-5.5z"/><path fill="currentColor" stroke="none" d="M12 6.5v11l8-5.5z"/>',
 });
 
 export function icon(name, className = '') {

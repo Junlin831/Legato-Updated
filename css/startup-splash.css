@@ -84,23 +84,23 @@ html[data-legato-navigation="reload"] .startup-splash {
     text-align: center
 }
 
-.startup-splash-tenutino {
+.startup-splash-character {
     display: block;
     width: 46px;
     height: auto;
     margin-bottom: 28px;
     filter: drop-shadow(0 0 16px rgba(209, 161, 90, .1));
-    animation: startup-tenutino-arrive 500ms cubic-bezier(.2, .7, .2, 1) both
+    animation: startup-character-arrive 500ms cubic-bezier(.2, .7, .2, 1) both
 }
 
-.startup-splash-tenutino.is-travelling {
+.startup-splash-character.is-travelling {
     z-index: 2;
     object-fit: contain;
     transition:
-        left var(--startup-tenutino-travel-ms) cubic-bezier(.22, .72, .2, 1),
-        top var(--startup-tenutino-travel-ms) cubic-bezier(.22, .72, .2, 1),
-        width var(--startup-tenutino-travel-ms) cubic-bezier(.22, .72, .2, 1),
-        height var(--startup-tenutino-travel-ms) cubic-bezier(.22, .72, .2, 1)
+        left var(--startup-character-travel-ms) cubic-bezier(.22, .72, .2, 1),
+        top var(--startup-character-travel-ms) cubic-bezier(.22, .72, .2, 1),
+        width var(--startup-character-travel-ms) cubic-bezier(.22, .72, .2, 1),
+        height var(--startup-character-travel-ms) cubic-bezier(.22, .72, .2, 1)
 }
 
 .startup-splash-message {
@@ -171,7 +171,7 @@ html[data-legato-navigation="reload"] .startup-splash {
     opacity: .72
 }
 
-@keyframes startup-tenutino-arrive {
+@keyframes startup-character-arrive {
     from { opacity: 0; transform: translateY(-8px) scale(.96) }
     to { opacity: 1; transform: translateY(0) scale(1) }
 }
@@ -196,7 +196,7 @@ html[data-legato-navigation="reload"] .startup-splash {
 
 @media (prefers-reduced-motion: reduce) {
     .startup-splash,
-    .startup-splash-tenutino,
+    .startup-splash-character,
     .startup-splash-header,
     .startup-splash-message,
     .startup-splash-status,

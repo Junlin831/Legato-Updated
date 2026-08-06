@@ -1,7 +1,6 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
-import { generateCoachResponse } from './api/coach.js';
 
 const root = process.cwd();
 const port = Number(process.env.PORT || 8000);
@@ -9,12 +8,6 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 
 createServer(async (request, response) => {
   try {
-    if (request.url === '/api/coach.js') {
-      if (request.method !== 'POST') { response.writeHead(405, { 'Content-Type': 'application/json' }); return response.end(JSON.stringify({ error: 'Method not allowed.' })); }
-      let body = ''; for await (const chunk of request) body += chunk;
-      const result = await generateCoachResponse(JSON.parse(body || '{}'));
-      response.writeHead(200, { 'Content-Type': 'application/json' }); return response.end(JSON.stringify(result));
-    }
     const pathname = request.url === '/' ? '/index.html' : decodeURIComponent(request.url.split('?')[0]);
     const path = normalize(join(root, pathname));
     if (!path.startsWith(root)) throw Object.assign(new Error('Forbidden'), { status: 403 });
