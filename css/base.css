@@ -67,21 +67,19 @@
 }
 
 :root {
-    /* Surfaces, darkest → lightest. Cool indigo scale — matches the cosmic
-       treatment on the sheet-music surface so the workspace and the score
-       read as one material instead of two conflicting palettes. */
-    --ink: #100E1E;
-    --panel: #130F22;
-    --panel-2: #1B1730;
-    --panel-3: #201B3A;
-    --panel-4: #241F42;
+    /* Surfaces, darkest → lightest. Warm sand/amber scale. */
+    --ink: #141210;
+    --panel: #16130F;
+    --panel-2: #1E1912;
+    --panel-3: #231E14;
+    --panel-4: #271F16;
 
     /* Text on dark surfaces. --tan sits between ivory (primary) and tan-dim
        (secondary/labels); used mainly for filled-pill tag copy. */
     --ivory: #F5EEDF;
     --tan: #E9D9BE;
     --tan-dim: #A6987F;
-    --hairline: rgba(200, 205, 245, .09);
+    --hairline: rgba(240, 225, 195, .08);
 
     --danger: #d97a70;
 

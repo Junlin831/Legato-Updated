@@ -27,6 +27,8 @@ const ICONS = Object.freeze({
   // Whole rest: a filled block hanging beneath a staff line.
   rest: '<path d="M4 9h16"/><rect x="9" y="9" width="6" height="4.5" rx="0.5" fill="currentColor" stroke="none"/>',
   fastForward: '<path fill="currentColor" stroke="none" d="M3 6.5v11l8-5.5z"/><path fill="currentColor" stroke="none" d="M12 6.5v11l8-5.5z"/>',
+  volumeOn: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/>',
+  volumeOff: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m17 9 5 6M22 9l-5 6"/>',
 });
 
 export function icon(name, className = '') {

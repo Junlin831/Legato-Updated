@@ -201,6 +201,10 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       window.addEventListener('resize', syncPanelResizer);
       requestAnimationFrame(syncPanelResizer);
 
+      async function goHome() {
+        await withViewFade(async () => navigate(LANDING_HASH));
+      }
+
       const sheetMusic = mountSheetMusicPanel({
         container: shell.querySelector('#sheet-music-pane-mount'),
         callbacks: {
@@ -210,6 +214,10 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             // panel and audio scheduler both re-read effective settings on
             // demand.
           },
+          // Also reachable from the sidebar's own brand button, but that's
+          // hidden while the editor panel is collapsed — this is the only way
+          // home when the sheet music fills the screen.
+          onGoHome: goHome,
         },
       });
 
@@ -276,9 +284,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             selectedSeam = index;
             rerender();
           },
-          async onGoHome() {
-            await withViewFade(async () => navigate(LANDING_HASH));
-          },
+          onGoHome: goHome,
           onRenameProject(name) {
             const clean = name.trim() || 'Untitled project';
             currentName = clean;

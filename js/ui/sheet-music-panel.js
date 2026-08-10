@@ -27,6 +27,9 @@ const WHEEL_DELTA_PAGE_PX = 800;
 
 const TEMPLATE = `
 <section class="notation-stage" aria-label="Progression notation">
+  <button id="sheet-music-home" class="sheet-music-home" type="button" aria-label="Back to your constellation" title="Back to your constellation">
+    <img src="/assets/brand/legato-mark.png" alt="" draggable="false">
+  </button>
   <div class="notation-stage-toolbar">
     <button id="sheet-music-fast-return" class="sheet-music-fast-return" type="button" aria-label="Hold to speed up particles drifting back into place" title="Hold to speed up return">${ icon('fastForward') }</button>
     <div class="sheet-music-zoom-control" role="group" aria-label="Zoom">
@@ -69,6 +72,9 @@ const TEMPLATE = `
 export function mountSheetMusicPanel({ container, callbacks = {} }) {
   container.classList.add('sheet-music-pane');
   container.innerHTML = TEMPLATE;
+
+  const homeBtn = container.querySelector('#sheet-music-home');
+  homeBtn.onclick = () => callbacks.onGoHome?.();
 
   const sheetMusicEl = container.querySelector('#sheet-music');
   const zoomValueEl = container.querySelector('#sheet-music-zoom-value');

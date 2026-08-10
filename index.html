@@ -78,6 +78,12 @@
     ever fade back in — if it lived inside the router-managed root.
   -->
   <div id="view-fade" class="view-fade" aria-hidden="true"></div>
+  <!--
+    Mount point for the "dive into a star" transition (see
+    js/ui/star-open-transition.js) — same reasoning as #view-fade above: it
+    must survive the router replacing #app-root mid-transition.
+  -->
+  <div id="star-dive-mount"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/cjs/vexflow.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>

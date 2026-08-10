@@ -11,11 +11,6 @@ function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-export function shouldShowStartupSplash(navigationType = globalThis.performance
-  ?.getEntriesByType?.('navigation')?.[0]?.type ?? 'navigate') {
-  return navigationType !== 'reload';
-}
-
 /**
  * Prepare one startup overture: choose its sentence and reuse the sheet-music
  * WebGL engine to assemble the miniature staff from particles left-to-right.

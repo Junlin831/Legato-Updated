@@ -4,7 +4,6 @@ import {
   beginStartupHandoff,
   completeStartupHandoff,
   queryStartupHandoffTarget,
-  shouldShowStartupSplash,
   startupHandoffDuration,
   STARTUP_HANDOFF_MAX_MS,
   STARTUP_HANDOFF_MIN_MS,
@@ -113,10 +112,4 @@ test('support message library contains exactly 20 unique sentences', () => {
 test('support message selection uses the supplied random position', () => {
   assert.equal(pickSupportMessage(() => 0), SUPPORT_MESSAGES[0]);
   assert.equal(pickSupportMessage(() => 0.999), SUPPORT_MESSAGES[19]);
-});
-
-test('startup splash is skipped only for browser reloads', () => {
-  assert.equal(shouldShowStartupSplash('navigate'), true);
-  assert.equal(shouldShowStartupSplash('back_forward'), true);
-  assert.equal(shouldShowStartupSplash('reload'), false);
 });

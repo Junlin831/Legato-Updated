@@ -8,9 +8,8 @@
 import { mountConstellationMap } from '../ui/constellation-map.js';
 import { navigate, editorHash } from '../router.js';
 import { makeProgression, makeSettings } from '../state.js';
-import { withViewFade } from '../ui/view-fade.js';
 
-export function createLandingView({ store, projectSettingsDialog }) {
+export function createLandingView({ store, projectSettingsDialog, starOpenTransition }) {
   return {
     async mount(root) {
       // Folder filter + multi-select state. Session-only by design: a page
@@ -21,11 +20,23 @@ export function createLandingView({ store, projectSettingsDialog }) {
       const panel = mountConstellationMap({
         container: root,
         callbacks: {
-          onCreateProject: async (name) => {
+          // Creating no longer jumps straight into the editor — clicking
+          // empty space on the map creates the project and stays put so the
+          // new star and its burst are actually visible; the user opens it
+          // like any other star when they're ready. `pos` (only passed for
+          // an empty-space click) must be registered with the map *before*
+          // refresh() below, since that's what makes the new star land where
+          // it was clicked instead of its default seeded position — a real
+          // ordering bug the first version of this had, since refresh()
+          // renders before an awaited caller ever gets control back.
+          onCreateProject: async (name, pos) => {
             const progression = makeProgression({ settings: makeSettings() });
             const project = await tryStore(() => store.createProject({ name, progression }));
-            if (!project) return;
-            await withViewFade(async () => navigate(editorHash(project.id)));
+            if (project) {
+              if (pos) panel.announceNewStar(project.id, pos);
+              await refresh();
+            }
+            return project;
           },
           onImport: async (text) => {
             panel.hideNotice();
@@ -67,12 +78,19 @@ export function createLandingView({ store, projectSettingsDialog }) {
               panel.showNotice({ message: error.message, level: 'error' });
             }
           },
+          // Opening a star fades to black (with the loading mark/animation
+          // held during the black beat — see star-open-transition.js)
+          // rather than the plain view-fade used elsewhere.
           onOpenProject: async (id) => {
-            await withViewFade(async () => navigate(editorHash(id)));
+            await starOpenTransition.play({ onMidTransition: () => navigate(editorHash(id)) });
           },
           onOpenDemo: async (demoId) => {
-            const clone = await tryStore(() => store.cloneDemo(demoId));
-            if (clone) await withViewFade(async () => navigate(editorHash(clone.id)));
+            await starOpenTransition.play({
+              onMidTransition: async () => {
+                const clone = await tryStore(() => store.cloneDemo(demoId));
+                if (clone) navigate(editorHash(clone.id));
+              },
+            });
           },
           onRenameProject: async (id, name) => {
             await tryStore(() => store.renameProject(id, name));
@@ -176,6 +194,7 @@ export function createLandingView({ store, projectSettingsDialog }) {
 
       return {
         async unmount() {
+          panel.destroy();
           root.replaceChildren();
         },
       };
