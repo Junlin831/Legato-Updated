@@ -1,5 +1,28 @@
 /* Top-level page shell — the two-pane grid. */
 
+/* View-transition fade — see index.html's comment on #view-fade for why this
+   lives outside any router-managed view. */
+.view-fade {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .38s ease
+}
+
+.view-fade.is-active {
+    opacity: 1;
+    pointer-events: all
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .view-fade {
+        transition: none
+    }
+}
+
 .app-shell {
     --panel-splitter-width: 12px;
     display: grid;

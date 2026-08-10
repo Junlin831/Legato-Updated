@@ -11,11 +11,6 @@ function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-export function shouldShowStartupSplash(navigationType = globalThis.performance
-  ?.getEntriesByType?.('navigation')?.[0]?.type ?? 'navigate') {
-  return navigationType !== 'reload';
-}
-
 /**
  * Prepare one startup overture: choose its sentence and reuse the sheet-music
  * WebGL engine to assemble the miniature staff from particles left-to-right.
@@ -116,7 +111,7 @@ export async function beginStartupHandoff(splash, {
  * node would race the destination view's own layout pass.
  */
 export function queryStartupHandoffTarget(root = document) {
-  return root.querySelector('.landing-shell .brand-mark, .app-shell[data-view-ready] .brand-mark');
+  return root.querySelector('.constellation-shell .brand-mark, .app-shell[data-view-ready] .brand-mark');
 }
 
 export async function waitForStartupHandoffTarget(root = document, {

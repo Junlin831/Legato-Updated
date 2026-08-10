@@ -14,15 +14,15 @@
  */
 import { mountPianoModal } from './ui/piano-modal.js';
 import { mountProjectSettingsModal } from './ui/project-settings-modal.js';
+import { mountStarOpenTransition } from './ui/star-open-transition.js';
 import { createProjectStore } from './persistence.js';
-import { createRouter, makeEditorResumePolicy, parseEditorHash, LANDING_HASH } from './router.js';
+import { createRouter, parseEditorHash, LANDING_HASH } from './router.js';
 import { createLandingView } from './views/landing-view.js';
 import { createEditorView } from './views/editor-view.js';
 import {
   beginStartupHandoff,
   completeStartupHandoff,
   mountStartupSplash,
-  shouldShowStartupSplash,
   waitForStartupHandoffTarget,
 } from './ui/startup-splash.js';
 
@@ -34,9 +34,10 @@ const pianoDialog = mountPianoModal({
 const projectSettingsDialog = mountProjectSettingsModal({
   container: document.querySelector('#project-settings-modal-mount'),
 });
+const starOpenTransition = mountStarOpenTransition(document.querySelector('#star-dive-mount'));
 
 const store = createProjectStore();
-const landingView = createLandingView({ store, projectSettingsDialog });
+const landingView = createLandingView({ store, projectSettingsDialog, starOpenTransition });
 const editorView = createEditorView({
   store,
   pianoDialog,
@@ -50,10 +51,9 @@ const router = createRouter({
     { match: (hash) => parseEditorHash(hash), view: editorView },
   ],
   notFound: landingView,
-  resume: makeEditorResumePolicy(store),
 });
 
-if (startupSplash && shouldShowStartupSplash()) {
+if (startupSplash) {
   // Keep the splash outside the router root so the destination view can mount
   // invisibly behind its black handoff stage.
   document.body.append(startupSplash);

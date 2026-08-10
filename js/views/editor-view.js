@@ -31,6 +31,7 @@ import { mountTransport } from '../ui/transport.js';
 import { applyTheme, clearTheme } from '../theme.js';
 import { navigate, LANDING_HASH } from '../router.js';
 import { icon } from '../ui/icons.js';
+import { withViewFade } from '../ui/view-fade.js';
 
 const SHELL_TEMPLATE = `
   <div class="app-shell">
@@ -79,8 +80,17 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       const panelResizer = shell.querySelector('#panel-resizer');
       const collapseToggle = shell.querySelector('#panel-collapse-toggle');
       let activeResizePointerId = null;
-      let editorCollapsed = false;
+      // Starts collapsed so the sheet music fills the screen on open; the
+      // user expands it explicitly via the toggle. No prior width to restore
+      // to yet, so the first expand falls back to MIN_EDITOR_PANE_WIDTH (see
+      // toggleEditorCollapse's `widthBeforeCollapse || min`).
+      let editorCollapsed = true;
       let widthBeforeCollapse = null;
+      shell.classList.add('is-editor-collapsed');
+      shell.style.setProperty('--editor-pane-width', '0px');
+      collapseToggle.setAttribute('aria-expanded', 'false');
+      collapseToggle.setAttribute('aria-label', 'Expand editor panel');
+      collapseToggle.title = 'Expand editor panel';
 
       function isSideBySideLayout() {
         return !window.matchMedia('(max-width: 1000px)').matches;
@@ -191,6 +201,10 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       window.addEventListener('resize', syncPanelResizer);
       requestAnimationFrame(syncPanelResizer);
 
+      async function goHome() {
+        await withViewFade(async () => navigate(LANDING_HASH));
+      }
+
       const sheetMusic = mountSheetMusicPanel({
         container: shell.querySelector('#sheet-music-pane-mount'),
         callbacks: {
@@ -200,6 +214,10 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             // panel and audio scheduler both re-read effective settings on
             // demand.
           },
+          // Also reachable from the sidebar's own brand button, but that's
+          // hidden while the editor panel is collapsed — this is the only way
+          // home when the sheet music fills the screen.
+          onGoHome: goHome,
         },
       });
 
@@ -266,9 +284,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             selectedSeam = index;
             rerender();
           },
-          onGoHome() {
-            navigate(LANDING_HASH);
-          },
+          onGoHome: goHome,
           onRenameProject(name) {
             const clean = name.trim() || 'Untitled project';
             currentName = clean;

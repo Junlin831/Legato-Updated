@@ -5,7 +5,8 @@
 @import url('./base.css');
 @import url('./startup-splash.css');
 @import url('./layout.css');
-@import url('./landing.css');
+@import url('./constellation.css');
+@import url('./star-dive.css');
 @import url('./editor-pane.css');
 @import url('./sheet-music-pane.css');
 @import url('./transport.css');

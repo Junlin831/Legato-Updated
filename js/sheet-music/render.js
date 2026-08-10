@@ -6,13 +6,12 @@
  * `<g>` group with `data-measure=<n>` — main.js toggles a `.is-playing` class
  * on that group during playback to light the current bar.
  *
- * User notes are drawn in a cool lavender (the harmony); technique-generated
- * notes in warm gold (the melody-adjacent, connective material — see the
- * palette comment above `staffColor`). Ties are drawn between adjacent
- * segments that share a `sourceId` (see rhythm.js), even across a barline.
- * When that barline is a system break, VexFlow's partial-tie form is used
- * for each side; a normal two-note tie would otherwise draw diagonally
- * across the page.
+ * User notes are drawn in `--ivory`-adjacent warm tan (the harmony);
+ * technique-generated notes in warm gold (the melody-adjacent, connective
+ * material). Ties are drawn between adjacent segments that share a
+ * `sourceId` (see rhythm.js), even across a barline. When that barline is a
+ * system break, VexFlow's partial-tie form is used for each side; a normal
+ * two-note tie would otherwise draw diagonally across the page.
  */
 import { vexKeyForNote, chordSpellingIdentity, formatChordSymbol } from '../engine/chords.js';
 import { accidentalFor } from '../engine/key-signature.js';
@@ -140,19 +139,10 @@ export function renderNotation(container, segments, settings, chords = []) {
   // a desktop-sized SVG that leaves a visual gap at higher zoom levels.
   const width = Math.max(320, container.clientWidth || 820);
   const clef = resolvedClef(segments, settings.clef);
-  // Cosmic palette: staff/barlines read as cool glowing filaments. User chord
-  // tones sit in a saturated indigo-lavender; technique-generated (connective
-  // /transition) material gets a saturated cyan so it still stands apart from
-  // user notes at a glance, without reintroducing a warm tone into the
-  // notation itself — gold stays reserved for the --accent-driven "current
-  // position" glow elsewhere in this pane. Both stay well short of white:
-  // the particle layer (particles.js) additively blooms every sampled pixel,
-  // and near-white source colors saturate that bloom into one flat merged
-  // glow instead of visible individual particles.
-  const staffColor = '#8b90d6';
-  const lineColor = '#5a5fa8';
-  const userColor = '#8f93e8';
-  const techniqueColor = '#3ecbdc';
+  const staffColor = '#927a58';
+  const lineColor = '#69563f';
+  const userColor = '#e6ceaa';
+  const techniqueColor = '#d1a15a';
   const notesBySource = [];
   const layout = [];
   const measureLength = settings.timeSig.num * 4 / settings.timeSig.den;
