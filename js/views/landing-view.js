@@ -5,10 +5,10 @@
  * loop. Navigation lives here: opening/cloning a project pushes an editor
  * route via the router.
  */
-import { mountLandingPanel } from '../ui/landing-panel.js';
+import { mountConstellationMap } from '../ui/constellation-map.js';
 import { navigate, editorHash } from '../router.js';
-import { openProjectSettingsModal } from '../ui/project-settings-modal.js';
 import { makeProgression, makeSettings } from '../state.js';
+import { withViewFade } from '../ui/view-fade.js';
 
 export function createLandingView({ store, projectSettingsDialog }) {
   return {
@@ -18,19 +18,14 @@ export function createLandingView({ store, projectSettingsDialog }) {
       let activeFolderId = null;
       let selectedIds = new Set();
 
-      const panel = mountLandingPanel({
+      const panel = mountConstellationMap({
         container: root,
         callbacks: {
-          onNewProject: () => {
-            openProjectSettingsModal(projectSettingsDialog, {
-              mode: 'create',
-              initial: { name: 'Untitled project', settings: makeSettings() },
-              onSubmit: async ({ name, settings }) => {
-                const progression = makeProgression({ settings });
-                const project = await tryStore(() => store.createProject({ name, progression }));
-                if (project) navigate(editorHash(project.id));
-              },
-            });
+          onCreateProject: async (name) => {
+            const progression = makeProgression({ settings: makeSettings() });
+            const project = await tryStore(() => store.createProject({ name, progression }));
+            if (!project) return;
+            await withViewFade(async () => navigate(editorHash(project.id)));
           },
           onImport: async (text) => {
             panel.hideNotice();
@@ -72,12 +67,12 @@ export function createLandingView({ store, projectSettingsDialog }) {
               panel.showNotice({ message: error.message, level: 'error' });
             }
           },
-          onOpenProject: (id) => {
-            navigate(editorHash(id));
+          onOpenProject: async (id) => {
+            await withViewFade(async () => navigate(editorHash(id)));
           },
           onOpenDemo: async (demoId) => {
             const clone = await tryStore(() => store.cloneDemo(demoId));
-            if (clone) navigate(editorHash(clone.id));
+            if (clone) await withViewFade(async () => navigate(editorHash(clone.id)));
           },
           onRenameProject: async (id, name) => {
             await tryStore(() => store.renameProject(id, name));
@@ -162,7 +157,10 @@ export function createLandingView({ store, projectSettingsDialog }) {
           store.listTrashed(),
           store.listFolders(),
         ]);
-        panel.render({ recent, demos, trashed, folders, activeFolderId, selectedIds });
+        // Single fixed central demo for now — see docs/legato-home-revamp-prompt.md
+        // §2. If a second demo is ever added, the constellation map will need a
+        // real multi-central-node treatment; not needed for the current one.
+        panel.render({ recent, demo: demos[0] ?? null, trashed, folders, activeFolderId, selectedIds });
       }
 
       async function tryStore(fn) {

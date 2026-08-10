@@ -70,6 +70,14 @@
   </div>
   <div id="piano-modal-mount"></div>
   <div id="project-settings-modal-mount"></div>
+  <!--
+    Fade-to-black used for view transitions (e.g. constellation map -> editor).
+    Deliberately a sibling of #app-root, not a child of it: the router
+    replaces #app-root's entire content on every navigation, which would
+    destroy this element mid-transition — leaving a fade-out with no way to
+    ever fade back in — if it lived inside the router-managed root.
+  -->
+  <div id="view-fade" class="view-fade" aria-hidden="true"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/cjs/vexflow.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>

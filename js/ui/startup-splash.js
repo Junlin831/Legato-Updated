@@ -116,7 +116,7 @@ export async function beginStartupHandoff(splash, {
  * node would race the destination view's own layout pass.
  */
 export function queryStartupHandoffTarget(root = document) {
-  return root.querySelector('.landing-shell .brand-mark, .app-shell[data-view-ready] .brand-mark');
+  return root.querySelector('.constellation-shell .brand-mark, .app-shell[data-view-ready] .brand-mark');
 }
 
 export async function waitForStartupHandoffTarget(root = document, {

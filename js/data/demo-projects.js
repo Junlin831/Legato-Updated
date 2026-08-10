@@ -21,20 +21,6 @@ import { notesFrom } from '../engine/chords.js';
  */
 const DEMO_EPOCH = '2026-07-18T00:00:00.000Z';
 
-/** ii-V-I with a tritone sub inserted between the V and I. */
-function makeIiVIWithTritoneSubProgression() {
-  const chords = [
-    makeChord(notesFrom(50, 'Min7'), 1, { rootMidi: 50, quality: 'Min7' }),
-    makeChord(notesFrom(55, 'Dom7'), 1, { rootMidi: 55, quality: 'Dom7' }),
-    makeChord(notesFrom(60, 'Major'), 1, { rootMidi: 60, quality: 'Major' }),
-  ];
-  return makeProgression({
-    settings: { tempo: 96, timeSig: { num: 4, den: 4 }, key: 0, clef: 'auto' },
-    chords,
-    seams: [null, 'tritoneSub'],
-  });
-}
-
 /** 4-5-3-6-2-5-1, the ubiquitous pop-song turnaround, in C major. */
 function make4536251PopProgression() {
   const chords = [
@@ -67,8 +53,9 @@ function make4536251PopProgression() {
 }
 
 /**
- * The demo registry the landing page reads. Add a demo by pushing another
- * entry — stable `id` keeps it addressable, `blurb` shows on the card.
+ * The demo registry the landing page reads. Currently a single fixed demo —
+ * the constellation map's permanent central node. Add another by pushing a
+ * second entry; a stable `id` keeps it addressable, `blurb` shows on the card.
  */
 export const DEMO_PROJECTS = [
   {
@@ -79,15 +66,6 @@ export const DEMO_PROJECTS = [
     updatedAt: DEMO_EPOCH,
     deletedAt: null,
     progression: make4536251PopProgression(),
-  },
-  {
-    id: 'demo-ii-v-i-tritone',
-    name: 'ii-V-I with tritone substitution',
-    blurb: 'The classic jazz cadence, then swap the V for its tritone sub and hear the shift.',
-    createdAt: DEMO_EPOCH,
-    updatedAt: DEMO_EPOCH,
-    deletedAt: null,
-    progression: makeIiVIWithTritoneSubProgression(),
   },
 ];
 

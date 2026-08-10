@@ -1,0 +1,263 @@
+/* Constellation map — the home screen. Deep space backdrop, no cards, no
+   hard edges; every surface here is either a glow, a curve, or plain text. */
+
+.constellation-shell {
+    --constellation-void: #05040f;
+    --constellation-nebula-violet: #6a4fc4;
+    --constellation-nebula-blue: #3a6ea8;
+    --constellation-star-dot: #e4e8ff;
+
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: var(--ivory);
+    background:
+        radial-gradient(ellipse 820px 520px at 80% 6%, color-mix(in srgb, var(--constellation-nebula-violet) 14%, transparent), transparent 62%),
+        radial-gradient(ellipse 680px 480px at 10% 92%, color-mix(in srgb, var(--constellation-nebula-blue) 12%, transparent), transparent 60%),
+        var(--constellation-void)
+}
+
+.constellation-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+        radial-gradient(1px 1px at 6% 14%, var(--constellation-star-dot), transparent),
+        radial-gradient(1px 1px at 18% 58%, var(--constellation-star-dot), transparent),
+        radial-gradient(1.3px 1.3px at 33% 8%, var(--constellation-star-dot), transparent),
+        radial-gradient(1px 1px at 47% 42%, var(--constellation-star-dot), transparent),
+        radial-gradient(1.3px 1.3px at 61% 76%, var(--constellation-star-dot), transparent),
+        radial-gradient(1px 1px at 72% 24%, var(--constellation-star-dot), transparent),
+        radial-gradient(1px 1px at 84% 54%, var(--constellation-star-dot), transparent),
+        radial-gradient(1.3px 1.3px at 12% 84%, var(--constellation-star-dot), transparent),
+        radial-gradient(1px 1px at 56% 4%, var(--constellation-star-dot), transparent),
+        radial-gradient(1px 1px at 92% 88%, var(--constellation-star-dot), transparent);
+    background-repeat: repeat;
+    background-size: 420px 320px;
+    opacity: .3
+}
+
+.constellation-topbar {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 30px
+}
+
+.constellation-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 0;
+    background: none;
+    color: var(--ivory);
+    cursor: pointer
+}
+
+.constellation-brand .brand-mark {
+    display: block;
+    width: 30px;
+    height: 30px;
+    object-fit: contain
+}
+
+.constellation-brand .brand {
+    font: 700 .82rem var(--font-body);
+    letter-spacing: .06em
+}
+
+.constellation-utility {
+    display: flex;
+    align-items: center;
+    gap: 8px
+}
+
+.constellation-utility a.icon-button {
+    color: var(--tan-dim)
+}
+
+.constellation-notice {
+    position: relative;
+    z-index: 2;
+    margin: 0 30px 10px;
+    padding: 10px 16px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--hairline);
+    background: rgba(16, 14, 30, .68);
+    color: var(--tan);
+    font: 500 var(--fs-copy) var(--font-body)
+}
+
+.constellation-notice[data-level="error"] { color: var(--danger) }
+.constellation-notice[data-level="warn"] { color: var(--accent) }
+
+.constellation-stage {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    min-height: 520px
+}
+
+.constellation-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none
+}
+
+.constellation-stars {
+    position: absolute;
+    inset: 0
+}
+
+/* Invisible hit-target — all visible star rendering happens on the canvas
+   layer; this button only exists for click/hover/focus/keyboard access. */
+.constellation-star {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    margin: -24px 0 0 -24px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    outline: none
+}
+
+.constellation-star--central {
+    width: 64px;
+    height: 64px;
+    margin: -32px 0 0 -32px;
+    cursor: default
+}
+
+.constellation-star:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent)
+}
+
+.has-focus .constellation-star:not(.is-focused) {
+    pointer-events: none
+}
+
+/* Focus panel — name + Edit/Back (or the create form), floating near the
+   star with no bordered box, just a soft translucent pill for legibility. */
+.constellation-focus-panel {
+    position: absolute;
+    z-index: 3;
+    transform: translate(-50%, 22px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    min-width: 180px;
+    border-radius: var(--radius-card);
+    background: rgba(16, 14, 30, .72);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--hairline);
+    text-align: center
+}
+
+/* Toggled off/on (with a forced reflow in between) by the JS every time the
+   panel switches to a different star, so the fade-in replays each time
+   instead of only the first time the panel ever appears. */
+.constellation-focus-panel.is-animating-in {
+    animation: constellation-panel-in .22s cubic-bezier(.2, .8, .2, 1) both
+}
+
+@keyframes constellation-panel-in {
+    from { opacity: 0; transform: translate(-50%, 12px) }
+    to { opacity: 1; transform: translate(-50%, 22px) }
+}
+
+.constellation-focus-name {
+    font: 700 1.1rem var(--font-chord);
+    font-style: var(--font-chord-style);
+    color: var(--ivory)
+}
+
+.constellation-panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
+.constellation-panel-primary,
+.constellation-panel-secondary {
+    padding: 8px 18px;
+    border-radius: var(--radius-pill);
+    font: 600 .8rem var(--font-body);
+    cursor: pointer;
+    transition: filter .15s ease, background .15s ease, color .15s ease
+}
+
+.constellation-panel-primary {
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--ink)
+}
+
+.constellation-panel-primary:hover { filter: brightness(1.08) }
+
+.constellation-panel-secondary {
+    border: 1px solid var(--hairline);
+    background: transparent;
+    color: var(--tan-dim)
+}
+
+.constellation-panel-secondary:hover {
+    color: var(--ivory);
+    border-color: var(--accent-border)
+}
+
+.constellation-create-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px
+}
+
+.constellation-create-input {
+    width: 100%;
+    padding: 9px 14px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill);
+    background: var(--panel-3);
+    color: var(--ivory);
+    font: 500 .88rem var(--font-body);
+    text-align: center;
+    outline: none;
+    transition: border-color .12s ease
+}
+
+.constellation-create-input:focus { border-color: var(--accent) }
+
+.constellation-hint {
+    position: relative;
+    z-index: 2;
+    margin: 0;
+    padding: 0 0 24px;
+    text-align: center;
+    color: var(--tan-dim);
+    font: 500 var(--fs-label) var(--font-body);
+    letter-spacing: .04em
+}
+
+@media (max-width: 700px) {
+    .constellation-topbar { padding: 18px 20px }
+    .constellation-stage { min-height: 440px }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .constellation-focus-panel {
+        animation: none;
+        transition: none
+    }
+}
