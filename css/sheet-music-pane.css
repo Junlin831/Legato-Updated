@@ -1,7 +1,10 @@
-/* Right-side sheet music surface: particle stage with corner zoom control,
-   VexFlow SVG layer, progress rail, and a shared transport row that hosts
-   play/stop plus temporary tempo/clef overrides on the right. Owns everything
-   inside <main class="sheet-music-pane">. */
+/* Sheet music surface: particle stage, VexFlow SVG layer, progress rail, and
+   a shared transport row that hosts play/stop plus a temporary tempo
+   override. Owns everything inside <main class="sheet-music-pane">. Fills
+   whatever vertical space is left below .editor-topbar (see layout.css).
+   Nothing docks to an edge — the floating Chords card (see layout.css)
+   overlaps the sheet rather than reserving space — so padding here is
+   plain and symmetric. */
 
 .sheet-music-pane {
     /* Warm amber/ember palette — scoped to this pane only, matching the rest
@@ -19,11 +22,12 @@
     --cosmos-chip: rgba(23, 18, 14, .68);
 
     min-width: 0;
-    min-height: 100vh;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
     container-type: inline-size;
-    padding: 34px clamp(28px, 4vw, 68px) 34px;
+    padding: 34px clamp(28px, 4vw, 68px);
     background:
         radial-gradient(ellipse 820px 520px at 80% 6%, color-mix(in srgb, var(--cosmos-nebula-violet) 16%, transparent), transparent 62%),
         radial-gradient(ellipse 680px 480px at 10% 92%, color-mix(in srgb, var(--cosmos-nebula-blue) 14%, transparent), transparent 60%),
@@ -86,48 +90,7 @@
     }
 }
 
-/* Always-visible way back to the constellation map, independent of the
-   editor sidebar — the sidebar's own brand button is hidden while it's
-   collapsed, which is the default full-screen state for the sheet music. */
-.sheet-music-home {
-    position: absolute;
-    z-index: 6;
-    top: 14px;
-    left: 20px;
-    width: 40px;
-    height: 40px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--hairline);
-    border-radius: 50%;
-    background: var(--cosmos-chip);
-    backdrop-filter: blur(6px);
-    cursor: pointer;
-    transition: border-color .18s, background .18s, transform .18s
-}
-
-.sheet-music-home:hover,
-.sheet-music-home:focus-visible {
-    border-color: var(--accent-border);
-    background: color-mix(in srgb, var(--accent) 16%, var(--cosmos-chip));
-    transform: scale(1.06)
-}
-
-.sheet-music-home:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px
-}
-
-.sheet-music-home img {
-    display: block;
-    width: 24px;
-    height: 24px;
-    object-fit: contain
-}
-
-/* Groups the fast-return button and the zoom pill in the stage's top-right
-   corner so they lay out with a consistent gap instead of each needing its
-   own hardcoded offset. */
+/* Holds the round chords-panel toggle in the stage's top-right corner. */
 .notation-stage-toolbar {
     position: absolute;
     z-index: 6;
@@ -138,9 +101,12 @@
     gap: 8px
 }
 
-.sheet-music-fast-return {
-    width: 36px;
-    height: 36px;
+/* Round button that opens/closes the floating Chords card (see
+   layout.css's .chords-floating-card). `.is-active` picks up the accent
+   fill so it's clear the panel is currently open. */
+.chords-panel-toggle {
+    width: 40px;
+    height: 40px;
     display: grid;
     place-items: center;
     border: 1px solid var(--hairline);
@@ -149,78 +115,43 @@
     backdrop-filter: blur(6px);
     color: var(--tan);
     cursor: pointer;
-    transition: color .18s, background .18s, border-color .18s
+    transition: color .18s, background .18s, border-color .18s, transform .1s ease-out
 }
 
-.sheet-music-fast-return:hover,
-.sheet-music-fast-return:focus-visible,
-.sheet-music-fast-return:active {
+.chords-panel-toggle:hover,
+.chords-panel-toggle:focus-visible {
     color: var(--ivory);
     border-color: var(--accent-border);
     background: color-mix(in srgb, var(--accent) 16%, var(--cosmos-chip))
 }
 
-.sheet-music-fast-return:focus-visible {
+.chords-panel-toggle:active {
+    transform: scale(.92)
+}
+
+.chords-panel-toggle:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px
 }
 
-.sheet-music-fast-return .ui-icon {
-    width: 16px;
-    height: 16px
+.chords-panel-toggle.is-active {
+    color: var(--ink);
+    border-color: var(--accent);
+    background: var(--accent)
 }
 
-.sheet-music-zoom-control {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 5px;
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-pill);
-    background: var(--cosmos-chip);
-    backdrop-filter: blur(6px)
-}
-
-.sheet-music-zoom-control button {
-    width: 34px;
-    height: 34px;
-    border: 0;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--tan);
-    font: 500 .82rem var(--font-body);
-    line-height: 1;
-    cursor: pointer;
-    transition: color .18s, background .18s
-}
-
-.sheet-music-zoom-control button:hover:not(:disabled) {
-    color: var(--ivory);
-    background: color-mix(in srgb, var(--accent) 14%, transparent)
-}
-
-.sheet-music-zoom-control button:disabled {
-    opacity: .35;
-    cursor: not-allowed
-}
-
-.sheet-music-zoom-control .ui-icon {
-    width: 18px;
-    height: 18px
-}
-
-.sheet-music-zoom-control output {
-    min-width: 52px;
-    text-align: center;
-    color: var(--tan);
-    font: 600 .74rem var(--font-body);
-    letter-spacing: .06em
+.chords-panel-toggle .ui-icon {
+    width: 17px;
+    height: 17px
 }
 
 /* Notation stage — the notation remains semantic VexFlow, floated over a
    deep-space atmosphere instead of a printed page. Grows to fill the
    vertical space of the sheet-music pane so the sheet occupies the full
-   right column instead of hugging the top. */
+   right column instead of hugging the top. Deliberately has no background,
+   shadow, or border of its own — it's not a separate card, just where the
+   notation sits within the pane's own atmosphere (see .sheet-music-pane),
+   so the sheet reads as one continuous surface with nothing framing it. */
 .notation-stage {
     position: relative;
     --sheet-music-progress: 0%;
@@ -229,19 +160,7 @@
     margin: 0;
     padding: 64px 0 48px;
     display: flex;
-    align-items: center;
-    border: 1px solid var(--cosmos-hairline);
-    border-radius: var(--radius-card);
-    background:
-        radial-gradient(ellipse at 24% 46%, color-mix(in srgb, var(--cosmos-nebula-violet) 12%, transparent), transparent 40%),
-        radial-gradient(ellipse at 82% 78%, color-mix(in srgb, var(--cosmos-nebula-blue) 10%, transparent), transparent 42%),
-        linear-gradient(180deg, rgba(16, 12, 6, .5), rgba(8, 6, 2, .22));
-    box-shadow:
-        inset 0 1px rgba(230, 206, 170, .035),
-        inset 0 -1px rgba(0, 0, 0, .4);
-    overflow: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--cosmos-hairline) transparent
+    align-items: center
 }
 
 /* Faint scattered starfield, tiled behind the notation. Kept low-opacity and
@@ -267,18 +186,6 @@
     background-repeat: repeat;
     background-size: 420px 260px;
     opacity: .38
-}
-
-.notation-stage::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background:
-        linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 16px) top left / 42px 42px no-repeat,
-        linear-gradient(315deg, color-mix(in srgb, var(--accent) 11%, transparent), transparent 16px) bottom right / 42px 42px no-repeat;
-    opacity: .55
 }
 
 .staff-glow {
@@ -334,7 +241,7 @@
        override that on canvas elements — the width/height overrides do,
        clamping the display size to the layer while keeping the internal
        buffer sharp on retina. Without this, the canvas overflows the
-       notation-stage and horizontal zoom-out never fits everything. */
+       notation-stage. */
     position: absolute;
     inset: 0;
     width: 100%;
@@ -437,15 +344,19 @@
     }
 }
 
-@media(max-width:1000px) {
+@media (prefers-reduced-transparency: reduce) {
     .sheet-music-pane {
-        min-height: auto;
-        padding: 30px 24px 30px
+        --cosmos-chip: rgba(23, 18, 14, .94);
     }
 
-    .notation-stage {
-        flex: 0 0 auto;
-        min-height: 340px
+    .chords-panel-toggle {
+        backdrop-filter: none
+    }
+}
+
+@media(max-width:1000px) {
+    .sheet-music-pane {
+        padding: 30px 24px
     }
 }
 
@@ -468,10 +379,5 @@
     .notation-stage-toolbar {
         top: 12px;
         right: 12px
-    }
-
-    .sheet-music-home {
-        top: 12px;
-        left: 12px
     }
 }

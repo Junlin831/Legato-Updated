@@ -1,9 +1,16 @@
 /**
- * One-shot UI sound effects (star hover/select/birth) plus a single looping
- * ambient track for the constellation map. Deliberately plain
- * HTMLAudioElement rather than the Tone.js rig in playback.js — these are
- * fire-and-forget UI cues, not scheduled musical events, so there's nothing
- * to gain from a shared audio-context sampler here.
+ * One-shot UI sound effects (star hover/select/birth/delete) plus a single
+ * looping ambient track for the constellation map.
+ *
+ * One-shots go through the Web Audio API rather than HTMLAudioElement.
+ * The first version of this cloned a template `<audio>` element and called
+ * `.play()` on the clone for every trigger — cheap-looking, but each clone
+ * is its own independent decode/output pipeline, and firing a lot of them in
+ * quick succession (sweeping the pointer across several stars) audibly
+ * stalled whatever else was already playing, including the ambient loop.
+ * Decoding every effect once into a shared AudioBuffer and playing it
+ * through one shared AudioContext avoids that entirely — starting a buffer
+ * source is just scheduling a mix, not spinning up a new decoder.
  *
  * Browsers block audio until the page has seen a user gesture. Every play
  * call below swallows that rejection silently (`.catch(() => {})`) rather
@@ -17,35 +24,54 @@ const SFX_SOURCES = {
   starDeleted: '/assets/audio/delete.mp3',
 };
 
-const templates = new Map();
-
-function getTemplate(name) {
-  let el = templates.get(name);
-  if (!el) {
-    el = new Audio(SFX_SOURCES[name]);
-    el.preload = 'auto';
-    templates.set(name, el);
+let audioCtx = null;
+function getContext() {
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new Ctx();
   }
-  return el;
+  return audioCtx;
 }
 
-/**
- * Plays a one-shot effect. Clones the template element so rapid re-triggers
- * (e.g. sweeping the pointer across several stars) each get their own
- * playhead instead of cutting each other off mid-sound.
- */
+const bufferPromises = new Map();
+
+function loadBuffer(name) {
+  let promise = bufferPromises.get(name);
+  if (!promise) {
+    promise = fetch(SFX_SOURCES[name])
+      .then((response) => response.arrayBuffer())
+      .then((data) => getContext().decodeAudioData(data));
+    bufferPromises.set(name, promise);
+  }
+  return promise;
+}
+
+// Kick off decoding right away so the first real trigger doesn't wait on a
+// fetch + decode round-trip on top of the browser's own gesture gate.
+Object.keys(SFX_SOURCES).forEach((name) => { loadBuffer(name).catch(() => {}); });
+
+/** Plays a one-shot effect. Independent voice per call — overlapping triggers never cut each other off. */
 export function playSfx(name, { volume = 1 } = {}) {
-  const source = SFX_SOURCES[name];
-  if (!source) return;
-  const node = getTemplate(name).cloneNode(true);
-  node.volume = volume;
-  node.play().catch(() => {});
+  if (!SFX_SOURCES[name]) return;
+  const ctx = getContext();
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  loadBuffer(name).then((buffer) => {
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const gain = ctx.createGain();
+    gain.gain.value = volume;
+    source.connect(gain).connect(ctx.destination);
+    source.start();
+  }).catch(() => {});
 }
 
 /**
  * A single looping track, started lazily on the page's first user gesture
  * (autoplay policy) and controllable after that. Used for the constellation
- * map's ambient background music.
+ * map's ambient background music. Kept as a plain HTMLAudioElement rather
+ * than routed through the Web Audio API above — it's one long-lived stream
+ * rather than something re-triggered constantly, so there's no per-trigger
+ * decode cost to avoid here.
  */
 export function createAmbientLoop(src, { volume = 0.32 } = {}) {
   const el = new Audio(src);

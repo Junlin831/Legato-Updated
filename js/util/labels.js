@@ -32,11 +32,3 @@ const MAJOR_KEY_NAMES = {
 export function timeSigLabel(timeSig) {
     return `${ timeSig.num }/${ timeSig.den }`;
 }
-
-/**
- * @param {number} tempo  BPM.
- * @returns {string} '88 BPM'.
- */
-export function tempoLabel(tempo) {
-    return `${ tempo } BPM`;
-}

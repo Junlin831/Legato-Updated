@@ -1,5 +1,5 @@
 /**
- * Editor view — the two-pane composition workspace.
+ * Editor view — the composition workspace.
  *
  * This is the previous `main.js` logic wrapped in a mount/unmount contract
  * so the router can swap between landing and editor. All state (progression,
@@ -13,8 +13,16 @@
  *
  * On top of every mutation, `scheduleAutosave()` debounces a write to the
  * ProjectStore so localStorage stays in sync without a manual save button.
+ *
+ * Layout: a persistent top bar (brand + project title, always visible — this
+ * is also what the startup handoff animation lands on, see main.js) sits
+ * above the full-width sheet music, which is free to use the whole viewport
+ * since nothing docks to an edge. Chord editing lives in a small floating,
+ * draggable card (see ui/chords-floating-panel.js) toggled by a round button
+ * on the sheet's own toolbar — a picture-in-picture window the user parks
+ * wherever they like, not a panel that permanently claims screen space.
  */
-import { compile, makeChord, makeRest, makeTheme, reconcileSeams, beatsToBars, isTechniqueUsable } from '../state.js';
+import { compile, makeChord, makeRest, makeTheme, reconcileSeams, beatsToBars, isTechniqueUsable, isRest } from '../state.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
 import {
   playSegments,
@@ -27,25 +35,22 @@ import { openPianoModal, populateChordControls } from '../ui/piano-modal.js';
 import { openProjectSettingsModal } from '../ui/project-settings-modal.js';
 import { mountEditorPanel } from '../ui/editor-panel.js';
 import { mountSheetMusicPanel } from '../ui/sheet-music-panel.js';
+import { mountChordsFloatingPanel } from '../ui/chords-floating-panel.js';
+import { mountChordsMinimap } from '../ui/chords-minimap.js';
 import { mountTransport } from '../ui/transport.js';
 import { applyTheme, clearTheme } from '../theme.js';
 import { navigate, LANDING_HASH } from '../router.js';
-import { icon } from '../ui/icons.js';
 import { withViewFade } from '../ui/view-fade.js';
 
 const SHELL_TEMPLATE = `
   <div class="app-shell">
-    <aside id="editor-pane-mount"></aside>
-    <div id="panel-resizer" class="panel-resizer" role="separator" aria-label="Resize editor and notation panels" aria-orientation="vertical" aria-controls="editor-pane-mount sheet-music-pane-mount" tabindex="0">
-      <button type="button" id="panel-collapse-toggle" class="panel-collapse-toggle" aria-label="Collapse editor panel" aria-expanded="true" aria-controls="editor-pane-mount">${ icon('chevronLeft') }</button>
-    </div>
+    <header id="editor-topbar-mount" class="editor-topbar"></header>
     <main id="sheet-music-pane-mount"></main>
+    <div id="chords-floating-mount"></div>
   </div>
 `;
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
-const MIN_EDITOR_PANE_WIDTH = 410;
-const MIN_SHEET_MUSIC_PANE_WIDTH = 480;
 
 /**
  * @param {{ store: ReturnType<import('../persistence.js').createProjectStore>, pianoDialog: any, projectSettingsDialog: any }} deps
@@ -76,154 +81,50 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       // ── DOM shell + panels ──────────────────────────────────────────
       root.insertAdjacentHTML('beforeend', SHELL_TEMPLATE);
       const shell = root.querySelector('.app-shell');
-      const editorPaneMount = shell.querySelector('#editor-pane-mount');
-      const panelResizer = shell.querySelector('#panel-resizer');
-      const collapseToggle = shell.querySelector('#panel-collapse-toggle');
-      let activeResizePointerId = null;
-      // Starts collapsed so the sheet music fills the screen on open; the
-      // user expands it explicitly via the toggle. No prior width to restore
-      // to yet, so the first expand falls back to MIN_EDITOR_PANE_WIDTH (see
-      // toggleEditorCollapse's `widthBeforeCollapse || min`).
-      let editorCollapsed = true;
-      let widthBeforeCollapse = null;
-      shell.classList.add('is-editor-collapsed');
-      shell.style.setProperty('--editor-pane-width', '0px');
-      collapseToggle.setAttribute('aria-expanded', 'false');
-      collapseToggle.setAttribute('aria-label', 'Expand editor panel');
-      collapseToggle.title = 'Expand editor panel';
+      const editorTopbarMount = shell.querySelector('#editor-topbar-mount');
 
-      function isSideBySideLayout() {
-        return !window.matchMedia('(max-width: 1000px)').matches;
-      }
-
-      function getPaneResizeBounds() {
-        const shellBounds = shell.getBoundingClientRect();
-        const splitterWidth = panelResizer.getBoundingClientRect().width;
-        return {
-          left: shellBounds.left,
-          min: MIN_EDITOR_PANE_WIDTH,
-          max: Math.max(MIN_EDITOR_PANE_WIDTH, shellBounds.width - splitterWidth - MIN_SHEET_MUSIC_PANE_WIDTH),
-        };
-      }
-
-      function syncPanelResizer() {
-        if (!isSideBySideLayout()) return;
-        const { min, max } = getPaneResizeBounds();
-        // While collapsed the explicit width is intentionally below the
-        // ordinary minimum (0px) — clamping it here would fight the collapse.
-        if (!editorCollapsed) {
-          const explicitWidth = Number.parseFloat(shell.style.getPropertyValue('--editor-pane-width'));
-          if (Number.isFinite(explicitWidth)) {
-            const clampedWidth = Math.min(max, Math.max(min, explicitWidth));
-            if (clampedWidth !== explicitWidth) shell.style.setProperty('--editor-pane-width', `${ clampedWidth }px`);
-          }
-        }
-        const editorWidth = Math.round(editorPaneMount.getBoundingClientRect().width);
-        panelResizer.setAttribute('aria-valuemin', String(min));
-        panelResizer.setAttribute('aria-valuemax', String(max));
-        panelResizer.setAttribute('aria-valuenow', String(editorWidth));
-        panelResizer.setAttribute('aria-valuetext', `Editor panel width ${ editorWidth } pixels`);
-      }
-
-      function setEditorPaneWidth(width) {
-        if (!isSideBySideLayout() || editorCollapsed) return;
-        const { min, max } = getPaneResizeBounds();
-        const nextWidth = Math.round(Math.min(max, Math.max(min, width)));
-        shell.style.setProperty('--editor-pane-width', `${ nextWidth }px`);
-        syncPanelResizer();
-      }
-
-      function stopPanelResize() {
-        activeResizePointerId = null;
-        shell.classList.remove('is-resizing');
-      }
-
-      // Collapsing lets the sheet-music pane claim the full viewport width —
-      // useful for a denser score or just a bigger, higher-resolution stage
-      // for the cosmic notation. The pane's own ResizeObserver (see
-      // sheet-music-panel.js) already reflows VexFlow and the particle
-      // renderer whenever their container resizes, so no extra wiring is
-      // needed there.
-      function toggleEditorCollapse() {
-        if (!isSideBySideLayout()) return;
-        editorCollapsed = !editorCollapsed;
-        if (editorCollapsed) {
-          widthBeforeCollapse = editorPaneMount.getBoundingClientRect().width;
-          shell.style.setProperty('--editor-pane-width', '0px');
-        } else {
-          const { min, max } = getPaneResizeBounds();
-          const restored = Math.min(max, Math.max(min, widthBeforeCollapse || min));
-          shell.style.setProperty('--editor-pane-width', `${ Math.round(restored) }px`);
-        }
-        shell.classList.toggle('is-editor-collapsed', editorCollapsed);
-        collapseToggle.setAttribute('aria-expanded', String(!editorCollapsed));
-        const label = editorCollapsed ? 'Expand editor panel' : 'Collapse editor panel';
-        collapseToggle.setAttribute('aria-label', label);
-        collapseToggle.title = label;
-        syncPanelResizer();
-      }
-
-      collapseToggle.addEventListener('click', (event) => {
-        event.stopPropagation();
-        toggleEditorCollapse();
+      // Floating, not docked — starts closed so the sheet fills the screen;
+      // the user opens it explicitly via the round toggle on the sheet's
+      // toolbar. Unlike the old docked drawer, clicking elsewhere on the
+      // sheet does NOT close it — a picture-in-picture window is meant to
+      // stay put while you work, not disappear on a stray click.
+      const chordsPanel = mountChordsFloatingPanel({
+        container: shell.querySelector('#chords-floating-mount'),
       });
-      panelResizer.addEventListener('pointerdown', (event) => {
-        if (event.button !== 0 || !isSideBySideLayout() || editorCollapsed || collapseToggle.contains(event.target)) return;
-        event.preventDefault();
-        activeResizePointerId = event.pointerId;
-        panelResizer.setPointerCapture(event.pointerId);
-        shell.classList.add('is-resizing');
-        const { left } = getPaneResizeBounds();
-        setEditorPaneWidth(event.clientX - left);
-      });
-      panelResizer.addEventListener('pointermove', (event) => {
-        if (event.pointerId !== activeResizePointerId) return;
-        const { left } = getPaneResizeBounds();
-        setEditorPaneWidth(event.clientX - left);
-      });
-      panelResizer.addEventListener('pointerup', stopPanelResize);
-      panelResizer.addEventListener('pointercancel', stopPanelResize);
-      panelResizer.addEventListener('lostpointercapture', stopPanelResize);
-      panelResizer.addEventListener('keydown', (event) => {
-        if (!isSideBySideLayout() || editorCollapsed || collapseToggle.contains(event.target)) return;
-        const { min, max } = getPaneResizeBounds();
-        const currentWidth = editorPaneMount.getBoundingClientRect().width;
-        const step = event.shiftKey ? 80 : 24;
-        const nextWidth = event.key === 'ArrowLeft' ? currentWidth - step
-          : event.key === 'ArrowRight' ? currentWidth + step
-            : event.key === 'Home' ? min
-              : event.key === 'End' ? max
-                : null;
-        if (nextWidth == null) return;
-        event.preventDefault();
-        setEditorPaneWidth(nextWidth);
-      });
-      window.addEventListener('resize', syncPanelResizer);
-      requestAnimationFrame(syncPanelResizer);
+      const chordsMinimap = mountChordsMinimap({ container: chordsPanel.minimapMount });
 
       async function goHome() {
         await withViewFade(async () => navigate(LANDING_HASH));
+      }
+
+      function toggleChordsPanel() {
+        chordsPanel.toggle();
+        sheetMusic.setChordsPanelOpen(chordsPanel.isOpen());
       }
 
       const sheetMusic = mountSheetMusicPanel({
         container: shell.querySelector('#sheet-music-pane-mount'),
         callbacks: {
           onEffectiveSettingsChange() {
-            // Tempo/clef overrides don't touch progression state, but they do
-            // affect what Play should schedule. Nothing else to do here — the
-            // panel and audio scheduler both re-read effective settings on
-            // demand.
+            // The tempo override doesn't touch progression state, but it
+            // does affect what Play should schedule. Nothing else to do
+            // here — the panel and audio scheduler both re-read effective
+            // settings on demand.
           },
-          // Also reachable from the sidebar's own brand button, but that's
-          // hidden while the editor panel is collapsed — this is the only way
-          // home when the sheet music fills the screen.
-          onGoHome: goHome,
+          onToggleChordsPanel: toggleChordsPanel,
+          onNotationLayoutChange({ measureCount, measuresPerSystem }) {
+            chordsMinimap.render(measureCount, measuresPerSystem);
+          },
         },
       });
 
       const editor = mountEditorPanel({
-        container: shell.querySelector('#editor-pane-mount'),
+        headerContainer: editorTopbarMount,
+        bodyContainer: chordsPanel.bodyContainer,
         callbacks: {
+          onVisibleBarsChange(range) {
+            chordsMinimap.setVisibleRange(range);
+          },
           onEditProjectSettings() {
             openProjectSettingsModal(projectSettingsDialog, {
               mode: 'edit',
@@ -235,14 +136,10 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
                   meterType: progression.settings.meterType,
                   key: progression.settings.key,
                   clef: progression.settings.clef,
-                  theme: { ...progression.settings.theme },
+                  cardDensity: progression.settings.cardDensity,
                 },
               },
               onSubmit: ({ name, settings }) => applyProjectSettings({ name, settings }),
-              onAccentPreview: (accent) => applyTheme({
-                ...progression.settings.theme,
-                accent,
-              }),
             });
           },
           onAddChord() {
@@ -250,7 +147,9 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             openPianoModal(pianoDialog, null, saveChord, progression.settings.timeSig, progression.settings.key);
           },
           onAddRest() {
-            const rest = makeRest(beatsToBars(1, progression.settings.timeSig));
+            // A whole bar by default, same as a freshly added chord fills a
+            // full bar until the user shortens it via the beats dropdown.
+            const rest = makeRest(1);
             progression.chords.push(rest);
             if (progression.chords.length > 1) progression.seams.push(null);
             resetIneligibleSeams();
@@ -262,7 +161,20 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             openPianoModal(pianoDialog, chord, saveChord, progression.settings.timeSig, progression.settings.key);
           },
           onDeleteChord(chord) {
+            // No confirmation dialog — that would add friction to routine
+            // edits — but a misclick shouldn't be unrecoverable either, so
+            // the panel offers a brief undo instead (apple-design's
+            // agency/forgiveness principle).
+            const previousChords = progression.chords;
+            const previousSeams = progression.seams;
+            const previousSelectedSeam = selectedSeam;
             replaceChords(progression.chords.filter((item) => item.id !== chord.id));
+            editor.offerDeleteUndo(isRest(chord) ? 'Rest removed' : 'Chord removed', () => {
+              progression.chords = previousChords;
+              progression.seams = previousSeams;
+              selectedSeam = previousSelectedSeam;
+              rerender();
+            });
           },
           onReorderChords(orderedIds) {
             const byId = new Map(progression.chords.map((c) => [c.id, c]));
@@ -321,6 +233,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             name: currentName,
             progression,
           });
+          editor.flashSaved();
         } catch (error) {
           console.error(error);
         } finally {
@@ -346,8 +259,9 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         const timeSigChanged = previous.timeSig.num !== settings.timeSig.num || previous.timeSig.den !== settings.timeSig.den;
         const keyChanged = previous.key !== settings.key;
         const clefChanged = previous.clef !== settings.clef;
+        const cardDensityChanged = previous.cardDensity !== settings.cardDensity;
         const nameChanged = currentName !== name;
-        const nextTheme = makeTheme(settings.theme);
+        const nextTheme = makeTheme();
         const themeChanged = previous.theme.accent !== nextTheme.accent || previous.theme.chordFont !== nextTheme.chordFont;
 
         currentName = name;
@@ -357,6 +271,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           meterType: settings.meterType ?? previous.meterType,
           key: settings.key,
           clef: settings.clef,
+          cardDensity: settings.cardDensity ?? previous.cardDensity,
           theme: nextTheme,
         };
         if (themeChanged) applyTheme(nextTheme);
@@ -370,7 +285,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         // active pill and the meta pills re-read the accent-derived colors.
         // (Accent color itself cascades via CSS custom properties without a
         // rerender, but the segmented toggle stores its state in DOM classes.)
-        if (tempoChanged || keyChanged || timeSigChanged || clefChanged || nameChanged || themeChanged) {
+        if (tempoChanged || keyChanged || timeSigChanged || clefChanged || cardDensityChanged || nameChanged || themeChanged) {
           rerender();
         } else {
           scheduleAutosave();
@@ -504,11 +419,12 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         async unmount() {
           playbackRequest++;
           window.removeEventListener('beforeunload', beforeUnload);
-          window.removeEventListener('resize', syncPanelResizer);
           stopPlayback();
           await flushSave();
           editor.unmount?.();
           sheetMusic.unmount?.();
+          chordsMinimap.unmount?.();
+          chordsPanel.unmount?.();
           clearTheme();
           root.replaceChildren();
         },

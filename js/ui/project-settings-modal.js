@@ -18,7 +18,9 @@
  */
 import { installBackdropDismissal } from './dialog.js';
 import { icon } from './icons.js';
-import { TEMPO_MIN, TEMPO_MAX, TEMPO_DEFAULT, ACCENT_PRESETS, CHORD_FONTS, isCompoundMeter, makeTheme } from '../state.js';
+import { TEMPO_MIN, TEMPO_MAX, TEMPO_DEFAULT, isCompoundMeter, CARD_DENSITIES, DEFAULT_CARD_DENSITY } from '../state.js';
+
+const DENSITY_LABELS = { loose: 'Loose', compact: 'Compact', dense: 'Dense' };
 
 // 12 clock positions around the dial, going clockwise from 12 o'clock. Each
 // wedge stores its canonical circle-of-fifths integer. The three overlapping
@@ -88,13 +90,6 @@ const DIALOG_TEMPLATE = `
           <input id="project-settings-name-input" type="text" spellcheck="false" autocomplete="off" maxlength="120" />
         </label>
         <div class="settings-grid">
-          <label id="project-settings-tempo-field"><span>Tempo</span>
-            <div class="tempo-control">
-              <input id="project-settings-tempo-slider" type="range" ${ TEMPO_INPUT_ATTRS } />
-              <input id="project-settings-tempo" type="number" ${ TEMPO_INPUT_ATTRS } />
-              <small>BPM</small>
-            </div>
-          </label>
           <label id="project-settings-meter-type-field"><span>Meter type</span>
             <select id="project-settings-meter-type" class="form-select">
               <option value="simple">Simple</option>
@@ -104,6 +99,13 @@ const DIALOG_TEMPLATE = `
           <label id="project-settings-meter-field"><span>Time signature</span>
             <select id="project-settings-meter" class="form-select"></select>
           </label>
+          <label id="project-settings-tempo-field"><span>Tempo</span>
+            <div class="tempo-control">
+              <input id="project-settings-tempo-slider" type="range" ${ TEMPO_INPUT_ATTRS } />
+              <input id="project-settings-tempo" type="number" ${ TEMPO_INPUT_ATTRS } />
+              <small>BPM</small>
+            </div>
+          </label>
           <label id="project-settings-clef-field"><span>Clef</span>
             <select id="project-settings-clef" class="form-select">
               <option value="auto">Auto</option>
@@ -112,17 +114,6 @@ const DIALOG_TEMPLATE = `
             </select>
           </label>
         </div>
-        <fieldset class="theme-fieldset">
-          <legend>Theme</legend>
-          <div class="theme-field">
-            <p class="theme-field-label">Accent</p>
-            <div id="project-settings-accent-picker" class="accent-picker" role="radiogroup" aria-label="Accent color"></div>
-          </div>
-          <div class="theme-field">
-            <p class="theme-field-label">Chord symbols</p>
-            <div id="project-settings-chord-font-toggle" class="chord-font-toggle" role="radiogroup" aria-label="Chord symbol font"></div>
-          </div>
-        </fieldset>
       </div>
       <fieldset class="key-signature-fieldset">
         <legend>Key signature</legend>
@@ -136,6 +127,22 @@ const DIALOG_TEMPLATE = `
         </div>
       </fieldset>
     </div>
+    <fieldset class="chord-density-fieldset">
+      <legend>Chord card style</legend>
+      <div id="project-settings-density-picker" class="density-picker" role="radiogroup" aria-label="Chord card density">
+        ${ CARD_DENSITIES.map((density) => `<button type="button" class="density-option" data-density="${ density }" role="radio" aria-checked="false">${ DENSITY_LABELS[density] }</button>`).join('') }
+      </div>
+      <div class="chord-density-preview" aria-hidden="true">
+        <div id="project-settings-density-preview" class="progression-list">
+          <article class="chord-row">
+            <span class="chord-drag-handle">${ icon('grip') }</span>
+            <span class="chord-main"><strong class="chord-glyph">Cmaj7</strong><small>C · E · G · B</small></span>
+            <span class="chord-beats"><span class="chord-beats-display">1 <em>beat</em></span></span>
+            <span class="delete-button">${ icon('trash') }</span>
+          </article>
+        </div>
+      </div>
+    </fieldset>
     <footer class="dialog-footer">
       <button id="project-settings-submit" class="save-button" type="button">Create ${ icon('arrowRight') }</button>
     </footer>
@@ -149,8 +156,6 @@ export function mountProjectSettingsModal({ container }) {
   const dialog = container.querySelector('#project-settings-dialog');
   populateStaticOptions(dialog);
   renderKeyDial(dialog);
-  renderAccentPicker(dialog);
-  renderChordFontToggle(dialog);
   return dialog;
 }
 
@@ -161,41 +166,6 @@ function populateStaticOptions(dialog) {
 function syncMeterOptions(select, meterType, selected) {
   select.replaceChildren();
   METER_OPTIONS[meterType].forEach((label) => select.add(new Option(label, label, false, label === selected)));
-}
-
-// Labels for the chord-font modes. Kept next to the picker (not in state.js)
-// because they are UI copy, not part of the persistence contract.
-const CHORD_FONT_LABELS = { jazztext: 'JazzText', classical: 'Classical', scifi: 'Sci-Fi' };
-
-function renderAccentPicker(dialog) {
-  const container = dialog.querySelector('#project-settings-accent-picker');
-  container.replaceChildren();
-  ACCENT_PRESETS.forEach((preset) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'accent-swatch';
-    btn.dataset.accent = preset.hex;
-    btn.setAttribute('role', 'radio');
-    btn.setAttribute('aria-checked', 'false');
-    btn.setAttribute('aria-label', preset.name);
-    btn.style.background = preset.hex;
-    container.appendChild(btn);
-  });
-}
-
-function renderChordFontToggle(dialog) {
-  const container = dialog.querySelector('#project-settings-chord-font-toggle');
-  container.replaceChildren();
-  CHORD_FONTS.forEach((font) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'chord-font-option';
-    btn.dataset.chordFont = font;
-    btn.setAttribute('role', 'radio');
-    btn.setAttribute('aria-checked', 'false');
-    btn.textContent = CHORD_FONT_LABELS[font];
-    container.appendChild(btn);
-  });
 }
 
 function polar(angleRad, radius) {
@@ -252,7 +222,7 @@ function renderKeyDial(dialog) {
     majorText.setAttribute('y', String(majorLabelPos.y));
     majorText.setAttribute('text-anchor', 'middle');
     majorText.setAttribute('dominant-baseline', 'central');
-    majorText.setAttribute('class', 'key-wedge-major');
+    majorText.setAttribute('class', wedge.major.includes('/') ? 'key-wedge-major key-wedge-major--long' : 'key-wedge-major');
     majorText.textContent = wedge.major;
     svg.appendChild(majorText);
 
@@ -286,19 +256,15 @@ function renderKeyDial(dialog) {
  * @param {HTMLDialogElement} dialog
  * @param {{
  *   mode: 'create' | 'edit',
- *   initial: { name: string, settings: { tempo: number, timeSig: {num:number, den:number}, key: number, clef: 'auto'|'treble'|'bass' } },
- *   onSubmit: (result: { name: string, settings: { tempo: number, timeSig: {num:number, den:number}, key: number, clef: 'auto'|'treble'|'bass' } }) => void,
- *   onAccentPreview?: (accent: string) => void
+ *   initial: { name: string, settings: { tempo: number, timeSig: {num:number, den:number}, key: number, clef: 'auto'|'treble'|'bass', cardDensity?: 'loose'|'compact'|'dense' } },
+ *   onSubmit: (result: { name: string, settings: { tempo: number, timeSig: {num:number, den:number}, key: number, clef: 'auto'|'treble'|'bass', cardDensity: 'loose'|'compact'|'dense' } }) => void,
  * }} options
  */
-export function openProjectSettingsModal(dialog, { mode, initial, onSubmit, onAccentPreview }) {
+export function openProjectSettingsModal(dialog, { mode, initial, onSubmit }) {
   const title = dialog.querySelector('#project-settings-title');
   const nameInput = dialog.querySelector('#project-settings-name-input');
-  const settingsGrid = dialog.querySelector('.settings-grid');
   const tempoInput = dialog.querySelector('#project-settings-tempo');
   const tempoSlider = dialog.querySelector('#project-settings-tempo-slider');
-  const meterTypeField = dialog.querySelector('#project-settings-meter-type-field');
-  const meterField = dialog.querySelector('#project-settings-meter-field');
   const meterTypeSelect = dialog.querySelector('#project-settings-meter-type');
   const meterSelect = dialog.querySelector('#project-settings-meter');
   const clefSelect = dialog.querySelector('#project-settings-clef');
@@ -307,11 +273,10 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit, onAc
   const dial = dialog.querySelector('#project-settings-key-dial');
   const keyLabel = dialog.querySelector('#project-settings-key-label');
   const keySubLabel = dialog.querySelector('#project-settings-key-sub');
-  const accentPicker = dialog.querySelector('#project-settings-accent-picker');
-  const chordFontToggle = dialog.querySelector('#project-settings-chord-font-toggle');
+  const densityPicker = dialog.querySelector('#project-settings-density-picker');
+  const densityPreview = dialog.querySelector('#project-settings-density-preview');
 
   const isCreate = mode === 'create';
-  settingsGrid.classList.toggle('is-create', isCreate);
   title.textContent = isCreate ? 'Create New Project' : 'Edit Project Settings';
   submitBtn.innerHTML = isCreate ? `Create ${ icon('arrowRight') }` : `Save ${ icon('arrowRight') }`;
 
@@ -329,53 +294,12 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit, onAc
   const initialMeterType = initial.settings.meterType ?? (isCompoundMeter(initial.settings.timeSig) ? 'compound' : 'simple');
   meterTypeSelect.value = initialMeterType;
   syncMeterOptions(meterSelect, initialMeterType, initialMeter);
-  meterTypeField.hidden = !isCreate;
-  meterField.hidden = false;
   clefSelect.value = initial.settings.clef;
 
   meterTypeSelect.onchange = () => syncMeterOptions(meterSelect, meterTypeSelect.value, METER_OPTIONS[meterTypeSelect.value][0]);
 
   let currentKey = initial.settings.key;
   syncKeyUI();
-
-  const initialTheme = makeTheme(initial.settings.theme);
-  let currentAccent = initialTheme.accent;
-  let currentChordFont = initialTheme.chordFont;
-  syncThemeUI();
-
-  function syncThemeUI() {
-    // Keep this dialog in sync with its pending accent even on the landing
-    // page, where no project theme has been applied to <html> yet.
-    dialog.style.setProperty('--accent', currentAccent);
-    dialog.dataset.chordFont = currentChordFont;
-    accentPicker.querySelectorAll('.accent-swatch').forEach((el) => {
-      const active = el.dataset.accent === currentAccent;
-      el.classList.toggle('is-active', active);
-      el.setAttribute('aria-checked', String(active));
-      // Show the ring in the accent's own hex so the selection preview reads
-      // as a live theme swatch, not just a generic "selected" state.
-      el.style.setProperty('--swatch-ring', active ? el.dataset.accent : 'transparent');
-    });
-    chordFontToggle.querySelectorAll('.chord-font-option').forEach((el) => {
-      const active = el.dataset.chordFont === currentChordFont;
-      el.classList.toggle('is-active', active);
-      el.setAttribute('aria-checked', String(active));
-    });
-  }
-
-  accentPicker.onclick = (event) => {
-    const swatch = event.target.closest('.accent-swatch');
-    if (!swatch) return;
-    currentAccent = swatch.dataset.accent;
-    syncThemeUI();
-    onAccentPreview?.(currentAccent);
-  };
-  chordFontToggle.onclick = (event) => {
-    const option = event.target.closest('.chord-font-option');
-    if (!option) return;
-    currentChordFont = option.dataset.chordFont;
-    syncThemeUI();
-  };
 
   function syncKeyUI() {
     const canonical = ENHARMONIC_TO_WEDGE[currentKey] ?? null;
@@ -408,13 +332,27 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit, onAc
       syncKeyUI();
     }
   };
-  // Accent changes are intentionally a live preview. Returning to the
-  // opening theme here keeps Cancel, Escape, and backdrop dismissal from
-  // leaking an unsaved accent into the editor.
-  const close = () => {
-    onAccentPreview?.(initialTheme.accent);
-    dialog.close();
+
+  let currentDensity = CARD_DENSITIES.includes(initial.settings.cardDensity) ? initial.settings.cardDensity : DEFAULT_CARD_DENSITY;
+  syncDensityUI();
+
+  function syncDensityUI() {
+    densityPicker.querySelectorAll('.density-option').forEach((el) => {
+      const active = el.dataset.density === currentDensity;
+      el.classList.toggle('is-active', active);
+      el.setAttribute('aria-checked', String(active));
+    });
+    densityPreview.dataset.cardDensity = currentDensity;
+  }
+
+  densityPicker.onclick = (event) => {
+    const option = event.target.closest('.density-option');
+    if (!option) return;
+    currentDensity = option.dataset.density;
+    syncDensityUI();
   };
+
+  const close = () => { dialog.close(); };
   cancelBtn.onclick = close;
   installBackdropDismissal(dialog, close);
   dialog.oncancel = (event) => {
@@ -432,10 +370,10 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit, onAc
       settings: {
         tempo,
         timeSig: { num, den },
-        meterType: isCreate ? meterTypeSelect.value : initialMeterType,
+        meterType: meterTypeSelect.value,
         key: currentKey,
         clef: clefSelect.value,
-        theme: { accent: currentAccent, chordFont: currentChordFont },
+        cardDensity: currentDensity,
       },
     });
     dialog.close();

@@ -1,72 +1,79 @@
 /**
- * Left composition workspace: project title (with an Edit Project Settings
- * button beside it) and one ordered progression list. Each transition is
- * rendered at the seam between its two adjacent chord rows.
+ * Composition workspace, split across two mount points:
+ *   - `headerContainer` — the persistent top bar (brand + project title,
+ *     Edit Project Settings, meta pills, save status). Always visible, never
+ *     scrolls or collapses.
+ *   - `bodyContainer` — the Chords section (Add Rest/Add Chord, the ordered
+ *     progression list). Lives inside editor-view's bottom drawer.
  *
  * State lives in editor-view.js; this module renders from it and hands user
  * events back through `callbacks`. Score settings (tempo, time signature,
- * key, clef) are now edited through the shared project-settings-modal opened
- * by the pencil button — they no longer have inline controls here.
+ * key, clef, chord card density) are all edited through the shared
+ * project-settings-modal opened by the pencil button — they no longer have
+ * inline controls here.
  */
 import { availableBeats, beatChoicesForMeter, chordTotalBeats, barsToBeats, beatsToBars, isTechniqueUsable, isRest } from '../state.js';
 import { chordDisplayName, formatChordSymbol, noteName, chordToneName, chordSpellingIdentity } from '../engine/chords.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
 import { escapeHtml } from '../util/html.js';
-import { majorKeyName, timeSigLabel, tempoLabel } from '../util/labels.js';
+import { majorKeyName, timeSigLabel } from '../util/labels.js';
 import { icon } from './icons.js';
 
-const CARD_DENSITIES = ['loose', 'compact', 'dense'];
 const UI_MOTION_MS = 340;
 const UI_MOTION_NAME = 'surface-enter';
 
-const TEMPLATE = `
+const HEADER_TEMPLATE = `
 <header class="brand-block">
-  <button id="brand-home" class="brand-home" type="button" aria-label="View all projects">
+  <button id="brand-home" class="brand-home" type="button" aria-label="Go to your constellation">
     <img class="brand-mark" src="/assets/brand/legato-icon.png" alt="" draggable="false">
     <span class="brand">LEGATO</span>
   </button>
-  <button id="view-all-projects" class="text-action view-all-projects" type="button">${ icon('home') }<span>All projects</span></button>
 </header>
-
-<div class="editor-scroll">
-  <section class="project-title-block">
-    <div class="project-title-row">
-      <div id="project-name-field" class="project-name-field">
-        <input id="project-name-input" class="project-name-input" type="text" spellcheck="false" autocomplete="off" aria-label="Project name" />
-      </div>
-      <button id="edit-project-settings" class="edit-project-settings" type="button" aria-label="Edit project settings">
-        ${ icon('edit') }<span>Edit Project Settings</span>
-      </button>
+<section class="project-title-block">
+  <div class="project-title-row">
+    <div id="project-name-field" class="project-name-field">
+      <input id="project-name-input" class="project-name-input" type="text" spellcheck="false" autocomplete="off" aria-label="Project name" />
     </div>
     <div id="project-meta-pills" class="project-meta-pills"></div>
-  </section>
+    <span id="save-status" class="save-status" aria-live="polite">Saved</span>
+    <button id="edit-project-settings" class="edit-project-settings" type="button" aria-label="Edit project settings">
+      ${ icon('edit') }<span>Edit Project Settings</span>
+    </button>
+  </div>
+</section>
+`;
 
-  <section class="editor-section" aria-labelledby="chords-title">
-    <div class="section-title">
-      <div class="section-heading-group">
-        <h2 id="chords-title" class="section-heading">Chords</h2>
-        <button id="cycle-card-density" class="density-control" type="button">${ icon('density') }</button>
-      </div>
-      <div class="section-actions">
-        <button id="add-rest" class="ghost-action" type="button">${ icon('rest') }<span>Add Rest</span></button>
-        <button id="add-chord" class="primary-action" type="button">${ icon('plus') }<span>Add Chord</span></button>
-      </div>
+const BODY_TEMPLATE = `
+<section class="editor-section" aria-label="Chords">
+  <div class="section-title">
+    <div class="section-actions">
+      <button id="add-rest" class="ghost-action" type="button">${ icon('rest') }<span>Add Rest</span></button>
+      <button id="add-chord" class="primary-action" type="button">${ icon('plus') }<span>Add Chord</span></button>
     </div>
-    <div id="progression-list" class="progression-list"></div>
-  </section>
+  </div>
+  <div id="progression-list" class="progression-list"></div>
+</section>
+
+<div id="delete-toast" class="delete-toast" role="status" aria-live="polite">
+  <span id="delete-toast-message" class="delete-toast-message"></span>
+  <button id="delete-toast-undo" type="button" class="delete-toast-undo">Undo</button>
 </div>
 `;
 
-export function mountEditorPanel({ container, callbacks }) {
-  container.classList.add('editor-pane');
-  container.innerHTML = TEMPLATE;
+export function mountEditorPanel({ headerContainer, bodyContainer, callbacks }) {
+  headerContainer.classList.add('editor-topbar-inner');
+  headerContainer.innerHTML = HEADER_TEMPLATE;
+  bodyContainer.classList.add('chords-panel-scroll');
+  bodyContainer.innerHTML = BODY_TEMPLATE;
 
-  const editorScrollEl = container.querySelector('.editor-scroll');
-  const progressionListEl = container.querySelector('#progression-list');
+  const progressionListEl = bodyContainer.querySelector('#progression-list');
   const chordsSectionEl = progressionListEl.closest('.editor-section');
-  const addChordBtn = container.querySelector('#add-chord');
-  const addRestBtn = container.querySelector('#add-rest');
-  const densityControlBtn = container.querySelector('#cycle-card-density');
+  const addChordBtn = bodyContainer.querySelector('#add-chord');
+  const addRestBtn = bodyContainer.querySelector('#add-rest');
+  const saveStatusEl = headerContainer.querySelector('#save-status');
+  const deleteToastEl = bodyContainer.querySelector('#delete-toast');
+  const deleteToastMessageEl = bodyContainer.querySelector('#delete-toast-message');
+  const deleteToastUndoBtn = bodyContainer.querySelector('#delete-toast-undo');
 
   // Drag-to-reorder chord cards. SortableJS observes DOM mutations, so the
   // instance survives the replaceChildren() inside renderProgression().
@@ -94,26 +101,60 @@ export function mountEditorPanel({ container, callbacks }) {
       callbacks.onReorderChords(orderedIds);
     },
   });
-  const brandHomeBtn = container.querySelector('#brand-home');
-  const viewAllBtn = container.querySelector('#view-all-projects');
-  const projectTitleRowEl = container.querySelector('.project-title-row');
-  const projectNameFieldEl = container.querySelector('#project-name-field');
-  const projectNameInput = container.querySelector('#project-name-input');
-  const editSettingsBtn = container.querySelector('#edit-project-settings');
-  const metaPillsEl = container.querySelector('#project-meta-pills');
+  const brandHomeBtn = headerContainer.querySelector('#brand-home');
+  const projectTitleRowEl = headerContainer.querySelector('.project-title-row');
+  const projectNameFieldEl = headerContainer.querySelector('#project-name-field');
+  const projectNameInput = headerContainer.querySelector('#project-name-input');
+  const editSettingsBtn = headerContainer.querySelector('#edit-project-settings');
+  const metaPillsEl = headerContainer.querySelector('#project-meta-pills');
   const expandedSeamIndexes = new Set();
   let directEditorOpenForCurrentRender = null;
-  let cardDensity = 'loose';
+  let currentBarRanges = [];
+
+  // ── Bar-range tracking for the FOV minimap ────────────────────────
+  // As the user scrolls the chord list, tell editor-view which bars are
+  // currently in view so the minimap (see chords-minimap.js) can highlight
+  // the matching cells — the minimap has no scroll of its own, so this is
+  // its only way of tracking what's visible.
+  function computeBarRanges(chords) {
+    let bars = 0;
+    return chords.map((chord) => {
+      const start = Math.floor(bars) + 1;
+      bars += chord.bars;
+      const end = Math.max(start, Math.ceil(bars - 1e-6));
+      return { start, end };
+    });
+  }
+
+  let visibleBarsFrame = 0;
+  function scheduleVisibleBarsReport() {
+    cancelAnimationFrame(visibleBarsFrame);
+    visibleBarsFrame = requestAnimationFrame(reportVisibleBars);
+  }
+  progressionListEl.addEventListener('scroll', scheduleVisibleBarsReport, { passive: true });
+
+  function reportVisibleBars() {
+    const rows = [...progressionListEl.querySelectorAll('.chord-row')];
+    if (!rows.length) { callbacks.onVisibleBarsChange?.(null); return; }
+    const listRect = progressionListEl.getBoundingClientRect();
+    let firstIndex = null;
+    let lastIndex = null;
+    rows.forEach((row, index) => {
+      const rect = row.getBoundingClientRect();
+      if (rect.bottom > listRect.top && rect.top < listRect.bottom) {
+        if (firstIndex === null) firstIndex = index;
+        lastIndex = index;
+      }
+    });
+    if (firstIndex === null) { callbacks.onVisibleBarsChange?.(null); return; }
+    const start = currentBarRanges[firstIndex]?.start ?? 1;
+    const end = currentBarRanges[lastIndex]?.end ?? start;
+    callbacks.onVisibleBarsChange?.({ start, end });
+  }
 
   addChordBtn.onclick = () => callbacks.onAddChord();
   addRestBtn.onclick = () => callbacks.onAddRest();
-  densityControlBtn.onclick = () => {
-    const currentIndex = CARD_DENSITIES.indexOf(cardDensity);
-    cardDensity = CARD_DENSITIES[(currentIndex + 1) % CARD_DENSITIES.length];
-    syncCardDensity();
-  };
   brandHomeBtn.onclick = () => callbacks.onGoHome();
-  viewAllBtn.onclick = () => callbacks.onGoHome();
   editSettingsBtn.onclick = () => callbacks.onEditProjectSettings();
   projectNameInput.onfocus = () => {
     projectNameInput.select();
@@ -130,17 +171,11 @@ export function mountEditorPanel({ container, callbacks }) {
     : new ResizeObserver(syncProjectTitleLayout);
   projectTitleResizeObserver?.observe(projectTitleRowEl);
 
-  function syncCardDensity() {
-    const nextDensity = CARD_DENSITIES[(CARD_DENSITIES.indexOf(cardDensity) + 1) % CARD_DENSITIES.length];
-    const currentLabel = cardDensity[0].toUpperCase() + cardDensity.slice(1);
-    const nextLabel = nextDensity[0].toUpperCase() + nextDensity.slice(1);
-    progressionListEl.dataset.cardDensity = cardDensity;
-    densityControlBtn.dataset.cardDensity = cardDensity;
-    densityControlBtn.setAttribute('aria-label', `Chord card density: ${ currentLabel }. Switch to ${ nextLabel }.`);
-    densityControlBtn.title = `Card density: ${ currentLabel }. Switch to ${ nextLabel }.`;
+  function syncCardDensity(density) {
+    progressionListEl.dataset.cardDensity = density;
   }
 
-  function makeChordRow(progression, chord, index) {
+  function makeChordRow(progression, chord, index, barRange) {
     const timeSig = progression.settings.timeSig;
     const beatChoices = beatChoicesForMeter(timeSig);
     const row = document.createElement('article');
@@ -159,7 +194,9 @@ export function mountEditorPanel({ container, callbacks }) {
     const mainHtml = isRestRow
       ? `<div class="chord-main chord-main--rest"><strong class="chord-glyph">${ glyphHtml }</strong><small>${ escapeHtml(notes) }</small></div>`
       : `<button class="chord-main" aria-label="Edit ${ displayName }"><strong class="chord-glyph">${ glyphHtml }</strong><small>${ escapeHtml(notes) }</small></button>`;
-    row.innerHTML = `<button class="chord-drag-handle" type="button" aria-label="Reorder ${ displayName }" tabindex="-1">${ icon('grip') }</button>${ mainHtml }<label class="chord-beats" aria-label="Beats for ${ displayName }"><span class="chord-beats-display" aria-hidden="true">${ formatBeatDisplay(currentBeats) } <em>${ currentBeats === 1 ? 'beat' : 'beats' }</em></span><select class="chord-beats-select">${ options.map((beats) => `<option value="${ beats }" ${ beats === currentBeats ? 'selected' : '' }>${ formatBeatDisplay(beats) }</option>`).join('') }</select></label><button class="delete-button" aria-label="Delete ${ displayName }">${ icon('trash') }</button>`;
+    const barLabel = barRange.start === barRange.end ? `Bar ${ barRange.start }` : `Bars ${ barRange.start }–${ barRange.end }`;
+    row.innerHTML = `<span class="chord-bar-number" aria-hidden="true">${ barRange.start }</span><button class="chord-drag-handle" type="button" aria-label="Reorder ${ displayName }" tabindex="-1">${ icon('grip') }</button>${ mainHtml }<label class="chord-beats" aria-label="Beats for ${ displayName }"><span class="chord-beats-display" aria-hidden="true">${ formatBeatDisplay(currentBeats) } <em>${ currentBeats === 1 ? 'beat' : 'beats' }</em></span><select class="chord-beats-select">${ options.map((beats) => `<option value="${ beats }" ${ beats === currentBeats ? 'selected' : '' }>${ formatBeatDisplay(beats) }</option>`).join('') }</select></label><button class="delete-button" aria-label="Delete ${ displayName }">${ icon('trash') }</button>`;
+    row.title = barLabel;
     if (!isRestRow) row.querySelector('.chord-main').onclick = () => callbacks.onEditChord(chord);
     row.querySelector('.chord-beats-select').onchange = (event) => callbacks.onSetChordBeats(chord, Number(event.target.value));
     row.querySelector('.delete-button').onclick = () => deleteChordWithAnimation(row, chord);
@@ -240,18 +277,42 @@ export function mountEditorPanel({ container, callbacks }) {
       return;
     }
 
-    let complete = false;
-    const finish = () => {
-      if (complete) return;
-      complete = true;
-      window.clearTimeout(fallback);
-      onComplete();
+    const start = () => {
+      let complete = false;
+      const finish = () => {
+        if (complete) return;
+        complete = true;
+        window.clearTimeout(fallback);
+        onComplete();
+      };
+      const fallback = window.setTimeout(finish, UI_MOTION_MS + 50);
+      element.addEventListener('animationend', (event) => {
+        if (event.target === element && event.animationName === UI_MOTION_NAME) finish();
+      });
+      element.classList.add(className);
     };
-    const fallback = window.setTimeout(finish, UI_MOTION_MS + 50);
+
+    // Keyframe animations restart from their own defined endpoint rather
+    // than retargeting from wherever they currently are — layering the exit
+    // animation on top of a still-playing entrance would make the element
+    // visibly snap to the entrance's finished state for a frame before
+    // reversing. Letting the entrance finish on its own terms first (with
+    // the same fallback-timeout safety net used above, in case its own
+    // animationend never fires) avoids that snap entirely.
+    const isEntering = element.classList.contains('chord-row--entering')
+      || element.classList.contains('transition-seam--entering');
+    if (!isEntering) { start(); return; }
+    let proceeded = false;
+    const proceedOnce = () => {
+      if (proceeded) return;
+      proceeded = true;
+      window.clearTimeout(enterFallback);
+      start();
+    };
+    const enterFallback = window.setTimeout(proceedOnce, UI_MOTION_MS + 50);
     element.addEventListener('animationend', (event) => {
-      if (event.target === element && event.animationName === UI_MOTION_NAME) finish();
+      if (event.target === element && event.animationName === UI_MOTION_NAME) proceedOnce();
     });
-    element.classList.add(className);
   }
 
   function renderChordGlyph({ root, baseline, marker, suffix, superscript, plain }) {
@@ -343,10 +404,12 @@ export function mountEditorPanel({ container, callbacks }) {
   function renderProgression(progression, selectedSeam) {
     progressionListEl.replaceChildren();
     const isEmpty = !progression.chords.length;
-    editorScrollEl.classList.toggle('editor-scroll--empty', isEmpty);
+    bodyContainer.classList.toggle('chords-panel-scroll--empty', isEmpty);
     chordsSectionEl.classList.toggle('editor-section--empty', isEmpty);
+    currentBarRanges = computeBarRanges(progression.chords);
     if (isEmpty) {
       progressionListEl.append(makeEmptyState());
+      callbacks.onVisibleBarsChange?.(null);
       return;
     }
     expandedSeamIndexes.forEach((index) => {
@@ -358,9 +421,10 @@ export function mountEditorPanel({ container, callbacks }) {
     });
     directEditorOpenForCurrentRender = null;
     progression.chords.forEach((chord, index) => {
-      progressionListEl.append(makeChordRow(progression, chord, index));
+      progressionListEl.append(makeChordRow(progression, chord, index, currentBarRanges[index]));
       if (index < progression.seams.length) progressionListEl.append(makeTransitionSeam(progression, index, selectedSeam));
     });
+    reportVisibleBars();
   }
 
   function renderMetaPills(settings) {
@@ -368,7 +432,6 @@ export function mountEditorPanel({ container, callbacks }) {
     const pills = [
       { label: timeSigLabel(settings.timeSig), variant: 'filled' },
       { label: majorKeyName(settings.key), variant: 'outline' },
-      { label: tempoLabel(settings.tempo), variant: 'outline' },
     ];
     for (const pill of pills) {
       const el = document.createElement('button');
@@ -403,15 +466,19 @@ export function mountEditorPanel({ container, callbacks }) {
   }
 
   function syncProjectTitleLayout() {
-    // Measure with the full label visible, then compact only if the whole
-    // project title, gap, and action cannot share the row.
+    // Measure with the full label visible, then compact only if the title,
+    // meta pills, save status, action button, and the gaps between all four
+    // cannot share the row.
     projectTitleRowEl.classList.remove('is-compact');
     const styles = getComputedStyle(projectNameInput);
     const measureContext = document.createElement('canvas').getContext('2d');
     measureContext.font = styles.font;
     const titleWidth = measureContext.measureText(projectNameInput.value).width;
     const gap = Number.parseFloat(getComputedStyle(projectTitleRowEl).gap) || 0;
-    const neededWidth = Math.ceil(titleWidth) + Math.ceil(editSettingsBtn.getBoundingClientRect().width) + gap;
+    const pillsWidth = metaPillsEl.getBoundingClientRect().width;
+    const saveStatusWidth = saveStatusEl.getBoundingClientRect().width;
+    const buttonWidth = editSettingsBtn.getBoundingClientRect().width;
+    const neededWidth = Math.ceil(titleWidth) + pillsWidth + saveStatusWidth + Math.ceil(buttonWidth) + gap * 3;
     projectTitleRowEl.classList.toggle('is-compact', neededWidth > projectTitleRowEl.clientWidth);
     syncProjectNameOverflow();
   }
@@ -423,17 +490,73 @@ export function mountEditorPanel({ container, callbacks }) {
     );
   }
 
+  // Deleting a chord is instant and irreversible from the UI's point of view
+  // — no confirmation dialog (that would add friction to routine edits), but
+  // a brief undo window catches the accidental click without asking the user
+  // to confirm every intentional one. Single-slot: a second delete while this
+  // is showing replaces the pending undo rather than queuing a history.
+  const DELETE_UNDO_MS = 5000;
+  let deleteUndoTimer = 0;
+  let pendingUndo = null;
+
+  function offerDeleteUndo(message, onUndo) {
+    window.clearTimeout(deleteUndoTimer);
+    pendingUndo = onUndo;
+    deleteToastMessageEl.textContent = message;
+    deleteToastEl.classList.remove('is-visible');
+    // Force a reflow so replacing an already-visible toast (rapid deletes)
+    // restarts its entrance instead of the repeated class-add being a no-op.
+    void deleteToastEl.offsetWidth;
+    deleteToastEl.classList.add('is-visible');
+    deleteUndoTimer = window.setTimeout(hideDeleteToast, DELETE_UNDO_MS);
+  }
+
+  function hideDeleteToast() {
+    window.clearTimeout(deleteUndoTimer);
+    deleteToastEl.classList.remove('is-visible');
+    pendingUndo = null;
+  }
+
+  deleteToastUndoBtn.onclick = () => {
+    const restore = pendingUndo;
+    hideDeleteToast();
+    restore?.();
+  };
+
+  // Autosave itself is silent (debounced, no dedicated save button) — this
+  // is the only signal the user gets that an edit actually persisted.
+  // Status/completion feedback for an otherwise-invisible background action.
+  // Kept even under reduced motion (as an instant show/hide, via CSS) since
+  // it's informational rather than decorative.
+  let saveStatusTimer = 0;
+  function flashSaved() {
+    window.clearTimeout(saveStatusTimer);
+    saveStatusEl.classList.remove('is-visible');
+    // Force a reflow so re-triggering while still visible (rapid edits)
+    // restarts the fade instead of the repeated class-add being a no-op.
+    void saveStatusEl.offsetWidth;
+    saveStatusEl.classList.add('is-visible');
+    saveStatusTimer = window.setTimeout(() => {
+      saveStatusEl.classList.remove('is-visible');
+    }, 1600);
+  }
+
   return {
     render({ progression, selectedSeam, projectName }) {
-      syncCardDensity();
+      syncCardDensity(progression.settings.cardDensity);
       syncProjectName(projectName);
       renderMetaPills(progression.settings);
       renderProgression(progression, selectedSeam);
     },
     animateAddedChord,
+    flashSaved,
+    offerDeleteUndo,
     unmount() {
       sortable?.destroy();
       projectTitleResizeObserver?.disconnect();
+      window.clearTimeout(saveStatusTimer);
+      window.clearTimeout(deleteUndoTimer);
+      cancelAnimationFrame(visibleBarsFrame);
     },
   };
 }

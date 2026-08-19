@@ -33,10 +33,22 @@ export function createLandingView({ store, projectSettingsDialog, starOpenTransi
             const progression = makeProgression({ settings: makeSettings() });
             const project = await tryStore(() => store.createProject({ name, progression }));
             if (project) {
-              if (pos) panel.announceNewStar(project.id, pos);
+              if (pos) {
+                panel.announceNewStar(project.id, pos);
+                // Clicking empty space to place a star is a placement action
+                // like a drag, not a random seed — it should stick, not
+                // settle back to a seeded spot on the next visit.
+                await tryStore(() => store.setMapPosition(project.id, pos));
+              }
               await refresh();
             }
             return project;
+          },
+          // Persists a dragged star's position so it survives leaving and
+          // returning to the map. Fire-and-forget: the map already applied
+          // the move locally, this just makes it stick for next time.
+          onMoveStar: (id, pos) => {
+            tryStore(() => store.setMapPosition(id, pos));
           },
           onImport: async (text) => {
             panel.hideNotice();

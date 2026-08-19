@@ -3,14 +3,12 @@
    file's variables and shared classes. Panel-specific rules should belong
    in the panel file.
 
-   Type system (two tiers, per the design revamp):
-     --font-body   Space Grotesk. Every UI label, section heading, body copy,
-                   kicker, and metadata value.
-     --font-chord  Display face RESERVED for chord symbols and project
-                   titles. Switches per project via [data-chord-font] on
-                   <html> — scifi (default) uses Orbitron, jazztext uses
-                   MuseJazz Text, classical uses Edwin italic. All three are
-                   self-hosted from /fonts under OFL.
+   Type system: both tiers below share one self-hosted display face,
+   Dalfitra (/fonts/dalfitra.ttf). Space Grotesk is kept loaded as a fallback
+   for any glyph Dalfitra doesn't cover.
+     --font-body   Every UI label, section heading, body copy, kicker, and
+                   metadata value.
+     --font-chord  Chord symbols and project titles.
 
    Accent color is per-project. --accent is set at runtime by editor-view
    when a project mounts, cleared on unmount. The two derived aliases give
@@ -19,49 +17,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @font-face {
-    font-family: 'MuseJazz Text';
-    src: url('/fonts/MuseJazzText.otf') format('opentype');
-    font-weight: 400 700;
-    font-style: normal;
-    font-display: swap
-}
-
-@font-face {
-    font-family: 'Edwin';
-    src: url('/fonts/Edwin-Roman.otf') format('opentype');
+    font-family: 'Dalfitra';
+    src: url('/fonts/dalfitra.ttf') format('truetype');
     font-weight: 400;
-    font-style: normal;
-    font-display: swap
-}
-
-@font-face {
-    font-family: 'Edwin';
-    src: url('/fonts/Edwin-Bold.otf') format('opentype');
-    font-weight: 700;
-    font-style: normal;
-    font-display: swap
-}
-
-@font-face {
-    font-family: 'Edwin';
-    src: url('/fonts/Edwin-Italic.otf') format('opentype');
-    font-weight: 400;
-    font-style: italic;
-    font-display: swap
-}
-
-@font-face {
-    font-family: 'Edwin';
-    src: url('/fonts/Edwin-BdIta.otf') format('opentype');
-    font-weight: 700;
-    font-style: italic;
-    font-display: swap
-}
-
-@font-face {
-    font-family: 'Orbitron';
-    src: url('/fonts/Orbitron-Bold.woff2') format('woff2');
-    font-weight: 700 800;
     font-style: normal;
     font-display: swap
 }
@@ -90,14 +48,12 @@
     --accent-border: color-mix(in srgb, var(--accent) 33%, transparent);
     --accent-tint: color-mix(in srgb, var(--accent) 55%, transparent);
 
-    /* Fonts. --font-chord flips on the data-chord-font attribute below. */
-    --font-body: 'Space Grotesk', sans-serif;
-    --font-chord-jazz: 'MuseJazz Text', 'Comic Sans MS', cursive;
-    --font-chord-classical: 'Edwin', Georgia, 'Times New Roman', serif;
-    --font-chord-scifi: 'Orbitron', 'Space Grotesk', sans-serif;
-    --font-chord: var(--font-chord-scifi);
+    /* Fonts. Both tiers share the one self-hosted display face. */
+    --font-body: 'Dalfitra', 'Space Grotesk', sans-serif;
+    --font-chord-face: 'Dalfitra', 'Space Grotesk', sans-serif;
+    --font-chord: var(--font-chord-face);
     --font-chord-style: normal;
-    --font-chord-weight: 800;
+    --font-chord-weight: 400;
 
     /* Small-text scale for tan-dim helper text. Space Grotesk reads smaller
        than the previous mono at the same rem, so these tokens centralize
@@ -120,21 +76,6 @@
     --radius-chord: 10px;
     --radius-cell: 8px;
     --radius-pill: 999px
-}
-
-/* Chord-font toggle. Set by editor-view via document.documentElement.dataset
-   .chordFont. Style/weight vary per face — Edwin's shipped weight is
-   bold-only, Orbitron (the default, scifi) only ships 700/800. */
-:root[data-chord-font="jazztext"] {
-    --font-chord: var(--font-chord-jazz);
-    --font-chord-style: normal;
-    --font-chord-weight: 700
-}
-
-:root[data-chord-font="classical"] {
-    --font-chord: var(--font-chord-classical);
-    --font-chord-style: normal;
-    --font-chord-weight: 700
 }
 
 * {
@@ -170,16 +111,6 @@ body {
     letter-spacing: .2em
 }
 
-/* Primary heading for major content sections in the project hub and
-   workspace panels. Keep title case in the markup so every surface shares
-   the same visual treatment without forcing uppercase labels. */
-.section-heading {
-    margin: 0;
-    color: var(--ivory);
-    font: 700 clamp(1.75rem, 3vw, 2.4rem)/1 var(--font-body);
-    letter-spacing: -.02em
-}
-
 /* Shared filled action used wherever creating a project or chord is the
    primary next step. Keeping the icon and button treatment together makes
    those actions visually identical across surfaces. */
@@ -196,11 +127,17 @@ body {
     font: 600 .82rem var(--font-body);
     letter-spacing: 0;
     cursor: pointer;
-    transition: filter .15s ease
+    transition: filter .15s ease, transform .1s ease-out
 }
 
 .primary-action:hover {
     filter: brightness(1.08)
+}
+
+/* Feedback lands on press, not release — waiting for pointerup to show
+   anything reads as dead. */
+.primary-action:active {
+    transform: scale(.97)
 }
 
 .primary-action:focus-visible {
@@ -253,13 +190,19 @@ body {
     background: transparent;
     color: var(--tan-dim);
     cursor: pointer;
-    transition: color .12s ease, border-color .12s ease, background .12s ease
+    transition: color .12s ease, border-color .12s ease, background .12s ease, transform .1s ease-out
 }
 
 .icon-button:hover,
 .delete-button:hover,
 .close-button:hover {
     color: var(--accent)
+}
+
+.icon-button:active,
+.delete-button:active,
+.close-button:active {
+    transform: scale(.9)
 }
 
 .icon-button:focus-visible,
@@ -476,38 +419,6 @@ body {
 
 .chord-glyph sup.chord-quality-suffix {
     margin-left: -.02em;
-}
-
-/* Segmented pill toggle — Classical / JazzText. Used by the project-settings
-   modal. Active option inverts on the accent; inactive stays muted. */
-.chord-font-toggle {
-    display: inline-flex;
-    padding: 3px;
-    background: var(--panel-3);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-pill);
-    width: fit-content
-}
-
-.chord-font-option {
-    padding: 7px 16px;
-    border: 0;
-    border-radius: var(--radius-pill);
-    background: transparent;
-    color: var(--tan-dim);
-    font: 600 .79rem var(--font-body);
-    letter-spacing: .04em;
-    cursor: pointer;
-    transition: background .15s ease, color .15s ease
-}
-
-.chord-font-option:hover:not(.is-active) {
-    color: var(--ivory)
-}
-
-.chord-font-option.is-active {
-    background: var(--accent);
-    color: var(--ink)
 }
 
 @keyframes spin {

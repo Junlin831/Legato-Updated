@@ -1,23 +1,19 @@
-/* Left composition workspace: brand header, project title, chord list, and
-   transition seams. Owns the entire <aside class="editor-pane"> subtree. */
+/* Composition workspace: persistent top bar (brand + project title) and the
+   chord list + transition seams that live inside the floating Chords card
+   (see layout.css's .chords-floating-card). Owns the .editor-topbar-inner
+   and .chords-panel-scroll subtrees (see js/ui/editor-panel.js). */
 
-.editor-pane {
-    height: 100vh;
-    position: sticky;
-    top: 0;
-    container-type: inline-size;
+.editor-topbar {
     background: var(--panel);
-    display: flex;
-    flex-direction: column
+    border-bottom: 1px solid var(--hairline)
 }
 
 .brand-block {
-    height: 74px;
+    height: 60px;
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 0 26px;
-    border-bottom: 1px solid var(--hairline)
+    padding: 0 26px
 }
 
 /* 30×30 rounded-square logomark. Filled with the current accent, the "L"
@@ -59,48 +55,6 @@
     color: var(--accent)
 }
 
-.view-all-projects {
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-pill);
-    background: transparent;
-    color: var(--tan-dim);
-    font: 500 var(--fs-eyebrow) var(--font-body);
-    letter-spacing: .04em;
-    text-transform: none;
-    cursor: pointer;
-    transition: color .12s ease, border-color .12s ease
-}
-
-.view-all-projects .ui-icon {
-    width: 14px;
-    height: 14px
-}
-
-.view-all-projects:hover {
-    color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 55.0%, transparent)
-}
-
-/* Structural passthrough. The brand-block, project-title-block, and the
-   Chords section title are all fixed; only the progression list inside the
-   Chords section scrolls (see .progression-list). */
-.editor-scroll {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden
-}
-
-.editor-scroll--empty {
-    padding-bottom: 0
-}
-
 .intro-block {
     padding: 42px 32px 38px;
     border-bottom: 1px solid var(--hairline)
@@ -118,8 +72,7 @@
 }
 
 .project-title-block {
-    padding: 26px 26px 22px;
-    border-bottom: 1px solid var(--hairline);
+    padding: 4px 26px 14px;
     display: grid;
     gap: 12px
 }
@@ -128,10 +81,14 @@
     margin-bottom: 0
 }
 
+/* Name, meta pills, save status, and the settings button all share one row
+   now — frees up the vertical space the old separate pills row used to take
+   for the sheet music below. Wraps on narrow viewports rather than clipping. */
 .project-title-row {
     display: flex;
-    align-items: baseline;
-    gap: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
     min-width: 0
 }
 
@@ -169,14 +126,109 @@
     opacity: 0
 }
 
-/* Row of meta pills under the project title. First is filled (time sig,
-   inverted on accent); the rest are accent-tinted outlines. Values are set
-   in editor-panel.js from progression.settings. */
+/* Meta pills now share the project-title-row (see above). First is filled
+   (time sig, inverted on accent); the rest are accent-tinted outlines.
+   Values are set in editor-panel.js from progression.settings. */
 .project-meta-pills {
+    flex: none;
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     margin: 0
+}
+
+/* Autosave has no dedicated button and no other visible confirmation — this
+   is the only feedback that an edit actually persisted. Toggled by
+   editor-panel.js's flashSaved(), called after every successful save. */
+.save-status {
+    flex: none;
+    white-space: nowrap;
+    color: var(--tan-dim);
+    font: 500 .68rem var(--font-body);
+    letter-spacing: .04em;
+    opacity: 0;
+    transition: opacity .5s ease
+}
+
+.save-status.is-visible {
+    opacity: 1
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .save-status {
+        transition: none
+    }
+}
+
+/* Floating undo prompt after a chord/rest deletion — see
+   editor-panel.js's offerDeleteUndo(). Anchored to .chords-floating-body
+   (see layout.css) so it stays pinned to the bottom of the floating card's
+   own content area regardless of scroll position. Stays in the DOM at all
+   times, toggled by opacity/transform alone — same pattern as
+   .view-fade/.star-dive — so re-triggering it for a second quick delete
+   retargets smoothly instead of restarting from nothing. */
+.delete-toast {
+    position: absolute;
+    z-index: 20;
+    left: 50%;
+    bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 18px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill);
+    background: var(--panel-4);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .38);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 10px);
+    transition: opacity .2s cubic-bezier(.2, .8, .2, 1), transform .2s cubic-bezier(.2, .8, .2, 1)
+}
+
+.delete-toast.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, 0)
+}
+
+.delete-toast-message {
+    color: var(--ivory);
+    font: 500 .8rem var(--font-body);
+    white-space: nowrap
+}
+
+.delete-toast-undo {
+    flex: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: 700 .8rem var(--font-body);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    transition: color .15s ease, transform .1s ease-out
+}
+
+.delete-toast-undo:hover,
+.delete-toast-undo:focus-visible {
+    color: var(--ivory)
+}
+
+.delete-toast-undo:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px
+}
+
+.delete-toast-undo:active {
+    transform: scale(.94)
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .delete-toast {
+        transition: opacity .2s ease
+    }
 }
 
 .meta-pill {
@@ -282,15 +334,15 @@
     max-width: 430px
 }
 
-/* Chords section owns the remaining panel height. Its title (heading + Add
-   Chord button) stays pinned; only the .progression-list below it scrolls. */
+/* Chords section owns the drawer's remaining height. Its title (heading +
+   Add Chord button) stays pinned; only the .progression-list below it
+   scrolls. */
 .editor-section {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: 24px 26px 0;
-    border-bottom: 1px solid var(--hairline)
+    padding: 20px 26px 0
 }
 
 /* With no chord rows, let the empty state use the unused viewport height so
@@ -306,20 +358,16 @@
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    gap: 12px;
     margin-bottom: 14px
 }
 
-.section-heading-group {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px
-}
-
+/* With no heading sharing the row, the two actions spread across the full
+   width instead of clustering to one side. */
 .section-actions {
-    margin-left: auto;
-    display: inline-flex;
+    flex: 1;
+    display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px
 }
 
@@ -336,7 +384,7 @@
     color: var(--accent);
     font: 600 .82rem var(--font-body);
     cursor: pointer;
-    transition: background .15s ease, border-color .15s ease
+    transition: background .15s ease, border-color .15s ease, transform .1s ease-out
 }
 
 .ghost-action:hover,
@@ -350,6 +398,10 @@
     outline-offset: 3px
 }
 
+.ghost-action:active {
+    transform: scale(.97)
+}
+
 .ghost-action svg {
     width: 18px;
     height: 18px;
@@ -357,39 +409,6 @@
     stroke: currentColor;
     stroke-width: 2.25;
     stroke-linecap: round
-}
-
-/* Cycles the chord cards through loose, compact, and dense layouts. The
-   icon-only affordance keeps the section header focused on its title. */
-.density-control {
-    display: inline-grid;
-    place-items: center;
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: var(--radius-cell);
-    background: transparent;
-    color: var(--tan-dim);
-    cursor: pointer;
-    transition: color .12s ease, border-color .12s ease, background .12s ease
-}
-
-.density-control .ui-icon {
-    width: 17px;
-    height: 17px
-}
-
-.density-control:hover,
-.density-control:focus-visible {
-    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-    color: var(--accent)
-}
-
-.density-control:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 3px
 }
 
 .modal-controls label {
@@ -525,6 +544,31 @@
     .transition-seam--deleting {
         animation: none
     }
+
+    .transition-editor {
+        transition: opacity .18s ease
+    }
+
+    @starting-style {
+        .transition-editor {
+            transform: none
+        }
+    }
+}
+
+/* Small bar-number badge — sits in the left gutter between the drag handle
+   and the chord content, so each card reads its position in the score
+   without opening the sheet. Purely informational (aria-hidden; the full
+   "Bar N" / "Bars N–M" phrase is on the row's title attribute instead). */
+.chord-bar-number {
+    position: absolute;
+    left: 28px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: color-mix(in srgb, var(--tan-dim) 75%, transparent);
+    font: 600 .6rem var(--font-body);
+    letter-spacing: .01em;
+    pointer-events: none
 }
 
 /* Drag handle — sits absolutely in the left gutter over the accent stripe,
@@ -621,7 +665,12 @@
     cursor: pointer;
     padding: 0;
     display: grid;
-    gap: var(--chord-main-gap)
+    gap: var(--chord-main-gap);
+    transition: transform .1s ease-out
+}
+
+.chord-main:active {
+    transform: scale(.98)
 }
 
 /* The chord glyph — biggest visual element in the whole editor. Uses the
@@ -836,6 +885,9 @@
     color: var(--accent)
 }
 
+/* Injected fresh into the DOM every time a seam opens (see editor-panel.js),
+   so there's no persistent node to toggle a class on for entry — @starting-style
+   animates the very first frame after insertion instead, no JS required. */
 .transition-editor {
     display: grid;
     gap: 11px;
@@ -843,7 +895,17 @@
     padding: 12px 14px;
     border-radius: var(--radius-cell);
     border-left: 2px solid color-mix(in srgb, var(--accent) 55.0%, transparent);
-    background: var(--panel-3)
+    background: var(--panel-3);
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity .18s cubic-bezier(.2, .8, .2, 1), transform .18s cubic-bezier(.2, .8, .2, 1)
+}
+
+@starting-style {
+    .transition-editor {
+        opacity: 0;
+        transform: translateY(-6px)
+    }
 }
 
 .transition-editor-copy {
@@ -863,31 +925,6 @@
     font: 400 var(--fs-label) var(--font-body);
     letter-spacing: .1em;
     text-transform: uppercase
-}
-
-@media(max-width:1000px) {
-    .editor-pane {
-        height: auto;
-        position: static
-    }
-
-    .editor-scroll {
-        overflow: visible
-    }
-
-    .editor-section {
-        flex: 0 0 auto
-    }
-
-    .progression-list {
-        flex: 0 0 auto;
-        overflow: visible
-    }
-
-    .app-shell .editor-pane {
-        border-right: 0;
-        border-bottom: 1px solid var(--hairline)
-    }
 }
 
 @media(max-width:650px) {

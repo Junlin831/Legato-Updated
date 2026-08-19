@@ -29,8 +29,8 @@ import { compileProgression } from './engine/compile.js';
  * Purely visual per-project preferences. Not read by compile()/audio/render;
  * only editor-view applies them (CSS custom property + <html> attribute).
  * @typedef {Object} Theme
- * @property {string} accent     One of ACCENT_PRESETS' hex values. Drives the CSS --accent variable.
- * @property {'jazztext'|'classical'|'scifi'} chordFont  Which family renders chord symbols and project titles.
+ * @property {string} accent     Fixed to DEFAULT_ACCENT. Drives the CSS --accent variable.
+ * @property {'scifi'} chordFont  Fixed to DEFAULT_CHORD_FONT. Which family renders chord symbols and project titles.
  */
 
 /**
@@ -42,6 +42,7 @@ import { compileProgression } from './engine/compile.js';
  *                               Notation-only: drives enharmonic spelling and printed accidentals.
  *                               Never mutates chord.notes. Transposition is a separate feature.
  * @property {'auto'|'treble'|'bass'} clef  One clef, no grand staff. 'auto' resolved at render time.
+ * @property {'loose'|'compact'|'dense'} cardDensity  How tightly chord cards pack in the editor list.
  * @property {Theme}   theme     Visual preferences (accent color, chord-symbol font).
  */
 
@@ -193,30 +194,18 @@ export const TEMPO_MIN = 1;
 export const TEMPO_MAX = 500;
 export const TEMPO_DEFAULT = 100;
 
-/** Five curated moods, each mapped to an accent hex. UI picker reads this
- *  ordered list directly; validation checks the theme against the hex set. */
-export const ACCENT_PRESETS = /** @type {const} */ ([
-    { hex: '#E8A94B', name: 'Amber',   mood: 'Warm · classic' },
-    { hex: '#B87FD9', name: 'Plum',    mood: 'Moody · jazz' },
-    { hex: '#4FBBA8', name: 'Teal',    mood: 'Calm · ambient' },
-    { hex: '#E8615B', name: 'Crimson', mood: 'Energetic · rock' },
-    { hex: '#8FBF7A', name: 'Sage',    mood: 'Folk · acoustic' },
-]);
-
-const ACCENT_HEX_SET = new Set(ACCENT_PRESETS.map((p) => p.hex));
-
-export const DEFAULT_ACCENT = ACCENT_PRESETS[0].hex;
-
-export const CHORD_FONTS = /** @type {const} */ (['jazztext', 'classical', 'scifi']);
-const CHORD_FONT_SET = new Set(CHORD_FONTS);
+export const DEFAULT_ACCENT = '#E8A94B';
 export const DEFAULT_CHORD_FONT = 'scifi';
 
+/** How tightly chord cards pack in the progression list. Edited in project
+ *  settings; the editor panel just renders whatever's in Settings. */
+export const CARD_DENSITIES = /** @type {const} */ (['loose', 'compact', 'dense']);
+const CARD_DENSITY_SET = new Set(CARD_DENSITIES);
+export const DEFAULT_CARD_DENSITY = 'loose';
+
 /** @returns {Theme} */
-export function makeTheme(overrides = {}) {
-    return {
-        accent: ACCENT_HEX_SET.has(overrides.accent) ? overrides.accent : DEFAULT_ACCENT,
-        chordFont: CHORD_FONT_SET.has(overrides.chordFont) ? overrides.chordFont : DEFAULT_CHORD_FONT,
-    };
+export function makeTheme() {
+    return { accent: DEFAULT_ACCENT, chordFont: DEFAULT_CHORD_FONT };
 }
 
 /** @returns {Settings} */
@@ -231,10 +220,12 @@ export function makeSettings(overrides = {}) {
         meterType,
         key: 0,
         clef: 'auto',
+        cardDensity: DEFAULT_CARD_DENSITY,
         ...overrides,
         timeSig,
         meterType,
-        theme: makeTheme(overrides.theme),
+        cardDensity: CARD_DENSITY_SET.has(overrides.cardDensity) ? overrides.cardDensity : DEFAULT_CARD_DENSITY,
+        theme: makeTheme(),
     };
 }
 
