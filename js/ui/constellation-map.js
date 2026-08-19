@@ -27,28 +27,7 @@
 import { escapeHtml } from '../util/html.js';
 import { icon } from './icons.js';
 import { playSfx, createAmbientLoop } from '../audio/sfx.js';
-
-// ── Seeded layout ─────────────────────────────────────────────────────────
-
-function hashStringToSeed(str) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i += 1) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-/** Mulberry32 — small, fast, deterministic PRNG keyed by a numeric seed. */
-function mulberry32(seed) {
-  let a = seed;
-  return function next() {
-    a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+import { hashStringToSeed, mulberry32 } from '../util/seeded-random.js';
 
 function clamp01(v) {
   return Math.max(0, Math.min(1, v));
@@ -140,6 +119,7 @@ const TEMPLATE = `
     <canvas id="constellation-canvas" class="constellation-canvas"></canvas>
     <div id="constellation-stars" class="constellation-stars"></div>
     <div id="constellation-focus-panel" class="constellation-focus-panel" hidden></div>
+    <button id="constellation-trash-portal" class="constellation-trash-portal" type="button" aria-label="Open trash">${ icon('portal') }</button>
   </div>
 </div>
 `;
@@ -178,6 +158,16 @@ const BIRTH_FLASH_S = 0.35;
 const BIRTH_CORE_RADIUS = 5.5;
 const ORANGE = [255, 150, 66];
 
+// A star recovered from the trash plays the exact same birth sequence as a
+// newly-created one, just tinted paler and cooler than the normal warm
+// GOLD/ORANGE — "this one just came back" rather than "this is brand new".
+// The tint isn't only for the birth animation: drawStar() keeps blending
+// toward it for RECOVER_GLOW_S afterward too, so the star reads as visibly
+// distinct for a few seconds once it's actually sitting on the map.
+const RECOVER_GOLD = [255, 226, 168];
+const RECOVER_ORANGE = [255, 214, 150];
+const RECOVER_GLOW_S = 6;
+
 // Delete animation timeline — three sequential phases, not overlapped:
 // 1. the star cools from gold to solid grey
 // 2. cracks split open across the now-grey body
@@ -200,7 +190,14 @@ export function mountConstellationMap({ container, callbacks }) {
   const focusPanel = shell.querySelector('#constellation-focus-panel');
   const noticeEl = shell.querySelector('#constellation-notice');
   const muteBtn = shell.querySelector('#constellation-mute');
+  const trashPortalBtn = shell.querySelector('#constellation-trash-portal');
   const ctx = canvas.getContext('2d');
+
+  trashPortalBtn.addEventListener('click', () => {
+    if (isOpening) return;
+    playSfx('select');
+    callbacks.onOpenTrash();
+  });
 
   // Ambient loop plays for as long as this map is mounted; paused on
   // destroy() so it doesn't keep going once the user opens a project. Starts
@@ -242,11 +239,16 @@ export function mountConstellationMap({ container, callbacks }) {
   // is extending the persisted project shape just to remember a map position.
   const pinnedPositions = new Map();
   let pendingBurstId = null;
+  let pendingBurstRecovered = false;
 
   // Eased alpha/boost per star, keyed by id and persisted across renders
   // (the `stars` array itself is rebuilt from scratch on every render, so
   // storing animation state ON a star object would reset it every time).
   const animState = new Map();
+  // id -> the animation clock time it was recovered at. drawStar() blends
+  // toward RECOVER_GOLD while an entry is fresh and prunes it once
+  // RECOVER_GLOW_S has elapsed (see there).
+  const recoveredStars = new Map();
 
   // One-shot creation births and in-progress delete animations. Both are
   // drawn independent of the normal interactive `stars` list.
@@ -734,7 +736,9 @@ export function mountConstellationMap({ container, callbacks }) {
     // mutation.
     if (isOpening) return;
     const path = event.composedPath();
-    if (path.some((el) => el.classList?.contains('constellation-star') || el.classList?.contains('constellation-focus-panel'))) return;
+    if (path.some((el) => el.classList?.contains('constellation-star')
+      || el.classList?.contains('constellation-focus-panel')
+      || el.classList?.contains('constellation-trash-portal'))) return;
     const stageRect = stage.getBoundingClientRect();
     const withinStage = event.clientX >= stageRect.left && event.clientX <= stageRect.right
       && event.clientY >= stageRect.top && event.clientY <= stageRect.bottom;
@@ -778,6 +782,17 @@ export function mountConstellationMap({ container, callbacks }) {
   function announceNewStar(id, pos) {
     pinnedPositions.set(id, pos);
     pendingBurstId = id;
+  }
+
+  /**
+   * Same birth treatment as announceNewStar, but for a project just restored
+   * from the trash — its position isn't touched (it resolves normally via
+   * buildStars, same as any other star), and the birth plays in the paler
+   * RECOVER_GOLD/RECOVER_ORANGE tint instead of the normal one.
+   */
+  function announceRecoveredStar(id) {
+    pendingBurstId = id;
+    pendingBurstRecovered = true;
   }
 
   // ── Canvas draw ────────────────────────────────────────────────────────
@@ -872,21 +887,36 @@ export function mountConstellationMap({ container, callbacks }) {
     animState.set(star.id, state);
     const { alpha, boost } = state;
 
+    // A recently-recovered star blends from RECOVER_GOLD back to the normal
+    // GOLD over RECOVER_GLOW_S — self-expiring, so nothing needs to clean
+    // this up on a timer.
+    let starColor = GOLD;
+    const recoveredAt = recoveredStars.get(star.id);
+    if (recoveredAt != null) {
+      const age = t - recoveredAt;
+      if (age >= RECOVER_GLOW_S) {
+        recoveredStars.delete(star.id);
+      } else {
+        const mix = 1 - age / RECOVER_GLOW_S;
+        starColor = GOLD.map((channel, index) => Math.round(channel + (RECOVER_GOLD[index] - channel) * mix));
+      }
+    }
+
     const coreRadius = star.kind === 'central' ? 7 : 5.5;
     const glowRadius = coreRadius * 5.5 * boost;
     const gradient = ctx.createRadialGradient(px.x, px.y, 0, px.x, px.y, glowRadius);
-    gradient.addColorStop(0, `rgba(${ GOLD.join(',') }, ${ 0.55 * alpha })`);
-    gradient.addColorStop(1, `rgba(${ GOLD.join(',') }, 0)`);
+    gradient.addColorStop(0, `rgba(${ starColor.join(',') }, ${ 0.55 * alpha })`);
+    gradient.addColorStop(1, `rgba(${ starColor.join(',') }, 0)`);
     ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.arc(px.x, px.y, glowRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    drawFlares(star, px, t, alpha, boost);
+    drawFlares(star, px, t, alpha, boost, starColor);
 
     ctx.beginPath();
     ctx.arc(px.x, px.y, coreRadius * boost, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(${ GOLD.join(',') }, ${ alpha })`;
+    ctx.fillStyle = `rgba(${ starColor.join(',') }, ${ alpha })`;
     ctx.fill();
   }
 
@@ -895,7 +925,7 @@ export function mountConstellationMap({ container, callbacks }) {
    * both drift slowly via per-flare sine waves (see makeFlares), so no two
    * flares (or stars) ever move in sync.
    */
-  function drawFlares(star, px, t, alpha, boost) {
+  function drawFlares(star, px, t, alpha, boost, color = GOLD) {
     const baseLen = star.kind === 'central' ? 13 : 9;
     for (const flare of star.flares) {
       const lenWave = 0.5 + 0.5 * Math.sin(t * flare.lenSpeed + flare.phase);
@@ -916,14 +946,14 @@ export function mountConstellationMap({ container, callbacks }) {
       ctx.lineTo(px.x - perpX, px.y - perpY);
       ctx.closePath();
       const grad = ctx.createLinearGradient(px.x, px.y, tipX, tipY);
-      grad.addColorStop(0, `rgba(${ GOLD.join(',') }, ${ flareAlpha })`);
-      grad.addColorStop(1, `rgba(${ GOLD.join(',') }, 0)`);
+      grad.addColorStop(0, `rgba(${ color.join(',') }, ${ flareAlpha })`);
+      grad.addColorStop(1, `rgba(${ color.join(',') }, 0)`);
       ctx.fillStyle = grad;
       ctx.fill();
     }
   }
 
-  function spawnStarBirth(star) {
+  function spawnStarBirth(star, { recovered = false } = {}) {
     const px = toPixel(star.pos);
     const rand = mulberry32(hashStringToSeed(`${ star.id }-birth-${ Date.now() }`));
     const particles = Array.from({ length: BIRTH_PARTICLE_COUNT }, () => ({
@@ -936,7 +966,9 @@ export function mountConstellationMap({ container, callbacks }) {
       size: 1.1 + rand() * 1.7,
     }));
     birthingIds.add(star.id);
-    births.push({ starId: star.id, x: px.x, y: px.y, startTime: performance.now() * 0.001, particles });
+    const startTime = performance.now() * 0.001;
+    births.push({ starId: star.id, x: px.x, y: px.y, startTime, particles, recovered });
+    if (recovered) recoveredStars.set(star.id, startTime);
   }
 
   /**
@@ -957,6 +989,7 @@ export function mountConstellationMap({ container, callbacks }) {
   }
 
   function drawBirthConverge(birth, age) {
+    const orange = birth.recovered ? RECOVER_ORANGE : ORANGE;
     const progress = clamp01(age / BIRTH_CONVERGE_S);
     for (const p of birth.particles) {
       // Each particle's own timeline is squeezed into the tail end of the
@@ -978,8 +1011,8 @@ export function mountConstellationMap({ container, callbacks }) {
         const tailX = x + Math.cos(p.angle) * trailLen;
         const tailY = y + Math.sin(p.angle) * trailLen;
         const grad = ctx.createLinearGradient(x, y, tailX, tailY);
-        grad.addColorStop(0, `rgba(${ ORANGE.join(',') }, ${ 0.7 * alpha })`);
-        grad.addColorStop(1, `rgba(${ ORANGE.join(',') }, 0)`);
+        grad.addColorStop(0, `rgba(${ orange.join(',') }, ${ 0.7 * alpha })`);
+        grad.addColorStop(1, `rgba(${ orange.join(',') }, 0)`);
         ctx.strokeStyle = grad;
         ctx.lineWidth = size * 0.8;
         ctx.beginPath();
@@ -990,13 +1023,15 @@ export function mountConstellationMap({ container, callbacks }) {
 
       ctx.beginPath();
       ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${ ORANGE.join(',') }, ${ alpha })`;
+      ctx.fillStyle = `rgba(${ orange.join(',') }, ${ alpha })`;
       ctx.fill();
     }
   }
 
   /** The collision flash (the "something special" moment) plus the core solidifying out of it. */
   function drawBirthCore(birth, age) {
+    const orange = birth.recovered ? RECOVER_ORANGE : ORANGE;
+    const gold = birth.recovered ? RECOVER_GOLD : GOLD;
     const coreAge = age - BIRTH_CORE_START_S;
     const growth = clamp01(coreAge / BIRTH_CORE_FORM_S);
     const eased = 1 - (1 - growth) ** 2; // ease-out — settles into place rather than overshooting
@@ -1007,8 +1042,8 @@ export function mountConstellationMap({ container, callbacks }) {
       const flashRadius = 14 + flashT * 46;
       const grad = ctx.createRadialGradient(birth.x, birth.y, 0, birth.x, birth.y, flashRadius);
       grad.addColorStop(0, `rgba(255, 250, 235, ${ 0.95 * flashAlpha })`);
-      grad.addColorStop(0.5, `rgba(${ ORANGE.join(',') }, ${ 0.5 * flashAlpha })`);
-      grad.addColorStop(1, `rgba(${ ORANGE.join(',') }, 0)`);
+      grad.addColorStop(0.5, `rgba(${ orange.join(',') }, ${ 0.5 * flashAlpha })`);
+      grad.addColorStop(1, `rgba(${ orange.join(',') }, 0)`);
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(birth.x, birth.y, flashRadius, 0, Math.PI * 2);
@@ -1018,8 +1053,8 @@ export function mountConstellationMap({ container, callbacks }) {
     const coreRadius = BIRTH_CORE_RADIUS * eased;
     const glowRadius = coreRadius * 5.5;
     const glowGrad = ctx.createRadialGradient(birth.x, birth.y, 0, birth.x, birth.y, glowRadius);
-    glowGrad.addColorStop(0, `rgba(${ GOLD.join(',') }, ${ 0.55 * eased })`);
-    glowGrad.addColorStop(1, `rgba(${ GOLD.join(',') }, 0)`);
+    glowGrad.addColorStop(0, `rgba(${ gold.join(',') }, ${ 0.55 * eased })`);
+    glowGrad.addColorStop(1, `rgba(${ gold.join(',') }, 0)`);
     ctx.fillStyle = glowGrad;
     ctx.beginPath();
     ctx.arc(birth.x, birth.y, glowRadius, 0, Math.PI * 2);
@@ -1027,12 +1062,13 @@ export function mountConstellationMap({ container, callbacks }) {
 
     ctx.beginPath();
     ctx.arc(birth.x, birth.y, coreRadius, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(${ GOLD.join(',') }, ${ eased })`;
+    ctx.fillStyle = `rgba(${ gold.join(',') }, ${ eased })`;
     ctx.fill();
   }
 
   /** A ring of energy expanding outward from the newly-formed core, fading as it dissipates. */
   function drawBirthRipple(birth, age) {
+    const gold = birth.recovered ? RECOVER_GOLD : GOLD;
     const rippleAge = age - BIRTH_RIPPLE_START_S;
     const progress = clamp01(rippleAge / BIRTH_RIPPLE_S);
     const eased = 1 - (1 - progress) ** 2;
@@ -1041,7 +1077,7 @@ export function mountConstellationMap({ container, callbacks }) {
     if (alpha <= 0.01) return;
     ctx.beginPath();
     ctx.arc(birth.x, birth.y, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(${ GOLD.join(',') }, ${ alpha })`;
+    ctx.strokeStyle = `rgba(${ gold.join(',') }, ${ alpha })`;
     ctx.lineWidth = Math.max(0.6, 2.4 * (1 - progress));
     ctx.stroke();
   }
@@ -1166,16 +1202,18 @@ export function mountConstellationMap({ container, callbacks }) {
 
     const idsNow = new Set(stars.map((s) => s.id));
     for (const id of animState.keys()) if (!idsNow.has(id)) animState.delete(id);
+    for (const id of recoveredStars.keys()) if (!idsNow.has(id)) recoveredStars.delete(id);
 
     renderStarButtons();
 
     if (pendingBurstId) {
       const newStar = stars.find((s) => s.id === pendingBurstId);
       if (newStar) {
-        spawnStarBirth(newStar);
+        spawnStarBirth(newStar, { recovered: pendingBurstRecovered });
         playSfx('starBorn');
       }
       pendingBurstId = null;
+      pendingBurstRecovered = false;
     }
 
     if (previousFocus && stars.some((s) => s.id === previousFocus)) {
@@ -1205,6 +1243,7 @@ export function mountConstellationMap({ container, callbacks }) {
   return {
     render,
     announceNewStar,
+    announceRecoveredStar,
     showNotice({ message, level = 'info' }) {
       noticeEl.textContent = message;
       noticeEl.dataset.level = level;

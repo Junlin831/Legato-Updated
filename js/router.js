@@ -76,3 +76,4 @@ export function editorHash(id) {
 }
 
 export const LANDING_HASH = '#/';
+export const TRASH_HASH = '#/trash';

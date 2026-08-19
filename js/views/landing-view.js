@@ -6,10 +6,11 @@
  * route via the router.
  */
 import { mountConstellationMap } from '../ui/constellation-map.js';
-import { navigate, editorHash } from '../router.js';
+import { navigate, editorHash, TRASH_HASH } from '../router.js';
+import { withViewFade } from '../ui/view-fade.js';
 import { makeProgression, makeSettings } from '../state.js';
 
-export function createLandingView({ store, projectSettingsDialog, starOpenTransition }) {
+export function createLandingView({ store, projectSettingsDialog, starOpenTransition, consumeRecoveredStarId }) {
   return {
     async mount(root) {
       // Folder filter + multi-select state. Session-only by design: a page
@@ -117,23 +118,11 @@ export function createLandingView({ store, projectSettingsDialog, starOpenTransi
             selectedIds.delete(id);
             await refresh();
           },
-          onRestoreProject: async (id) => {
-            await tryStore(() => store.restoreProject(id));
-            await refresh();
-          },
-          onDeleteProject: async (id) => {
-            await tryStore(() => store.deleteProject(id));
-            await refresh();
-          },
-          onEmptyTrash: async () => {
-            const trashed = await store.listTrashed();
-            if (!trashed.length) return;
-            const label = trashed.length === 1 ? '1 project' : `${ trashed.length } projects`;
-            if (!confirm(`Permanently delete ${ label } in the trash? This can't be undone.`)) return;
-            for (const project of trashed) {
-              await tryStore(() => store.deleteProject(project.id));
-            }
-            await refresh();
+          // Restoring/permanently-deleting a trashed project, and emptying
+          // the trash outright, are all owned by trash-view.js now — that's
+          // where the UI for browsing trashed projects actually lives.
+          onOpenTrash: async () => {
+            await withViewFade(async () => navigate(TRASH_HASH));
           },
 
           // ── Folders + multi-select ────────────────────────────────────
@@ -181,16 +170,15 @@ export function createLandingView({ store, projectSettingsDialog, starOpenTransi
       });
 
       async function refresh() {
-        const [recent, demos, trashed, folders] = await Promise.all([
+        const [recent, demos, folders] = await Promise.all([
           store.listProjects(),
           store.listDemos(),
-          store.listTrashed(),
           store.listFolders(),
         ]);
         // Single fixed central demo for now — see docs/legato-home-revamp-prompt.md
         // §2. If a second demo is ever added, the constellation map will need a
         // real multi-central-node treatment; not needed for the current one.
-        panel.render({ recent, demo: demos[0] ?? null, trashed, folders, activeFolderId, selectedIds });
+        panel.render({ recent, demo: demos[0] ?? null, folders, activeFolderId, selectedIds });
       }
 
       async function tryStore(fn) {
@@ -201,6 +189,12 @@ export function createLandingView({ store, projectSettingsDialog, starOpenTransi
           return null;
         }
       }
+
+      // Must run before the first refresh() — the pending burst it sets is
+      // only picked up by the render() call that follows it (see
+      // announceNewStar's identical ordering requirement in constellation-map.js).
+      const recoveredId = consumeRecoveredStarId?.();
+      if (recoveredId) panel.announceRecoveredStar(recoveredId);
 
       await refresh();
 

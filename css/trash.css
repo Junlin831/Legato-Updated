@@ -1,0 +1,461 @@
+/* The Trash — an abandoned library. Deliberately much darker and flatter
+   than the constellation's deep-space glow: nothing here should compete for
+   attention the way a living star does. Shelves recede into near-black;
+   grey stars are dust, not light sources. */
+
+.trash-shell {
+    --trash-void: #0b0a08;
+    --trash-shelf-wood: #1c1712;
+    --trash-shelf-wood-edge: #100d0a;
+    --trash-dust: #8b8477;
+
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: var(--tan);
+    background:
+        radial-gradient(ellipse 900px 560px at 50% -10%, rgba(70, 60, 45, .16), transparent 60%),
+        var(--trash-void)
+}
+
+/* Faint drifting dust motes — same cheap radial-gradient-field trick as the
+   constellation starfield, just desaturated and set adrift. Animates
+   `transform` (compositor-only) rather than `background-position`, which
+   would force a full repaint of this viewport-sized, six-gradient layer on
+   every frame for as long as the screen is open — noticeably heavier than
+   the constellation's own (static) starfield. The element is oversized by
+   more than the translation distance on every side so the pattern's tiling
+   edge is never visible mid-drift. */
+.trash-shell::before {
+    content: "";
+    position: absolute;
+    inset: -400px;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+        radial-gradient(1px 1px at 8% 20%, var(--trash-dust), transparent),
+        radial-gradient(1px 1px at 24% 64%, var(--trash-dust), transparent),
+        radial-gradient(1.2px 1.2px at 41% 12%, var(--trash-dust), transparent),
+        radial-gradient(1px 1px at 58% 48%, var(--trash-dust), transparent),
+        radial-gradient(1.2px 1.2px at 73% 78%, var(--trash-dust), transparent),
+        radial-gradient(1px 1px at 88% 30%, var(--trash-dust), transparent);
+    background-repeat: repeat;
+    background-size: 380px 300px;
+    opacity: .16;
+    animation: trash-dust-drift 90s linear infinite
+}
+
+@keyframes trash-dust-drift {
+    from { transform: translate3d(0, 0, 0) }
+    to { transform: translate3d(-380px, 300px, 0) }
+}
+
+/* A faint shaft of light from above — just enough to make the shelves
+   legible without undoing "barely visible". */
+.trash-shell::after {
+    content: "";
+    position: absolute;
+    top: -20%;
+    left: 30%;
+    width: 40%;
+    height: 70%;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at top, rgba(235, 220, 190, .05), transparent 70%)
+}
+
+.trash-topbar {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 22px 30px
+}
+
+.trash-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 0;
+    background: none;
+    color: var(--tan-dim);
+    cursor: pointer
+}
+
+.trash-brand .brand-mark {
+    display: block;
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    opacity: .7;
+    filter: grayscale(.6)
+}
+
+.trash-brand .brand {
+    font: 700 .82rem var(--font-body);
+    letter-spacing: .06em
+}
+
+.trash-brand:hover { color: var(--tan) }
+
+/* Absolutely centered on the topbar's full width rather than flex:1 between
+   the brand and utility groups — those two are different widths ("Empty
+   Trash" + back button is much wider than the small brand mark), so
+   centering in the leftover flex space between them reads as off-center. */
+.trash-heading {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 0;
+    max-width: 480px;
+    text-align: center
+}
+
+.trash-heading h1 {
+    margin: 0 0 4px;
+    font: 700 1.3rem var(--font-chord);
+    font-style: var(--font-chord-style);
+    color: var(--tan)
+}
+
+.trash-heading p {
+    margin: 0;
+    color: var(--tan-dim);
+    font: 500 var(--fs-copy) var(--font-body);
+    line-height: 1.5
+}
+
+.trash-utility {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
+.trash-empty-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: var(--radius-pill);
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+    background: transparent;
+    color: color-mix(in srgb, var(--danger) 85%, var(--tan-dim));
+    font: 600 .78rem var(--font-body);
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease
+}
+
+.trash-empty-btn svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round
+}
+
+.trash-empty-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border-color: var(--danger);
+    color: var(--danger)
+}
+
+.trash-empty-btn:disabled {
+    opacity: .35;
+    cursor: default
+}
+
+.trash-stage {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 46px;
+    padding: 20px clamp(24px, 6vw, 90px) 60px;
+    min-height: 520px
+}
+
+/* One shelf: a recessed dark slot with a wood-toned plank along its lower
+   edge. Stars rest just above the plank (see --rest-offset / --lift). */
+.trash-shelf {
+    position: relative;
+    height: 96px
+}
+
+.trash-shelf-back {
+    position: absolute;
+    inset: 0 0 22px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .35) 100%);
+    border-radius: 3px
+}
+
+.trash-shelf-plank {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 14px;
+    height: 10px;
+    background: linear-gradient(180deg, var(--trash-shelf-wood) 0%, var(--trash-shelf-wood-edge) 100%);
+    border-radius: 2px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, .5), 0 -1px 0 rgba(255, 245, 220, .04) inset
+}
+
+/* Sits inside one shelf (see trash-library.js), anchored above its plank
+   (bottom:14px + height:10px = the plank's top edge is 24px up) rather than
+   spread across the whole stage — that used to land the text squarely on
+   top of a plank line. */
+.trash-empty-state {
+    position: absolute;
+    left: 50%;
+    bottom: 32px;
+    transform: translateX(-50%);
+    z-index: 2;
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    width: max-content;
+    max-width: 90%;
+    text-align: center;
+    pointer-events: none
+}
+
+.trash-empty-headline {
+    margin: 0;
+    font: 700 1rem var(--font-chord);
+    font-style: var(--font-chord-style);
+    color: var(--tan-dim)
+}
+
+.trash-empty-copy {
+    margin: 0;
+    color: color-mix(in srgb, var(--tan-dim) 70%, transparent);
+    font: 500 var(--fs-copy) var(--font-body)
+}
+
+/* ── A star on the shelf ─────────────────────────────────────────────── */
+
+.trash-star {
+    --lift: 0px;
+    --drop-from: 0px;
+    --rest-offset: 0px;
+    position: absolute;
+    bottom: calc(24px + var(--rest-offset));
+    transform: translate(-50%, var(--lift));
+    z-index: 1
+}
+
+.trash-star.is-active { z-index: 5 }
+
+.trash-star.is-dropping {
+    animation: trash-star-drop .45s cubic-bezier(.34, 1.56, .4, 1) both
+}
+
+@keyframes trash-star-drop {
+    0% { transform: translate(-50%, var(--drop-from)) }
+    55% { transform: translate(-50%, 5px) }
+    78% { transform: translate(-50%, -2px) }
+    100% { transform: translate(-50%, 0px) }
+}
+
+.trash-star-hit {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 40px;
+    height: 40px;
+    margin: -20px 0 0 -20px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    cursor: grab;
+    outline: none;
+    touch-action: none
+}
+
+.trash-star.is-dragging .trash-star-hit { cursor: grabbing }
+
+.trash-star-hit:focus-visible {
+    box-shadow: 0 0 0 2px var(--tan-dim)
+}
+
+.trash-star-visual {
+    position: relative;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #cec7b6 0%, #837c6c 70%, transparent 100%);
+    box-shadow: 0 0 16px 4px rgba(160, 152, 132, .5);
+    pointer-events: none;
+    transition: background .5s ease, box-shadow .5s ease
+}
+
+.trash-star-visual::after {
+    content: "";
+    position: absolute;
+    inset: -18px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(160, 152, 132, .22), transparent 70%);
+    pointer-events: none
+}
+
+.trash-star:hover .trash-star-visual,
+.trash-star.is-active .trash-star-visual {
+    background: radial-gradient(circle, #ece6d4 0%, #a89f88 70%, transparent 100%);
+    box-shadow: 0 0 20px 5px rgba(200, 190, 164, .55)
+}
+
+/* Recovery: a bright blink, then the grey warms straight into gold —
+   reversing the constellation's gold-to-grey death animation. */
+.trash-star.is-recovering .trash-star-visual {
+    animation: trash-star-blink .62s ease-out both;
+    background: radial-gradient(circle, #ffedc4 0%, #e8a94b 65%, transparent 100%);
+    box-shadow: 0 0 22px 6px rgba(232, 169, 75, .6)
+}
+
+@keyframes trash-star-blink {
+    0% { filter: brightness(1) }
+    18% { filter: brightness(3.2) }
+    38% { filter: brightness(1.1) }
+    60% { filter: brightness(2.4) }
+    100% { filter: brightness(1) }
+}
+
+.trash-star.is-leaving {
+    transition: opacity .26s ease;
+    opacity: 0
+}
+
+/* Recover / confirm panel — floats above the star, same chrome language as
+   the constellation's focus panel (blurred dark pill) but shown/hidden via
+   .is-active rather than a JS-positioned singleton, since these never
+   overlap the way canvas-drawn stars can. */
+.trash-star-panel {
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    transform: translate(-50%, -10px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    min-width: 160px;
+    border-radius: var(--radius-card);
+    background: rgba(14, 12, 9, .82);
+    border: 1px solid rgba(240, 225, 195, .1);
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .16s ease, transform .16s ease
+}
+
+/* backdrop-filter only while actually shown — with many trashed stars,
+   giving every one of them an always-on blur layer (even hidden ones) is a
+   real GPU cost for zero visible benefit. */
+.trash-star.is-active .trash-star-panel {
+    opacity: 1;
+    pointer-events: auto;
+    backdrop-filter: blur(10px);
+    transform: translate(-50%, -14px)
+}
+
+.trash-star-name {
+    font: 600 .82rem var(--font-chord);
+    font-style: var(--font-chord-style);
+    color: var(--tan);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px
+}
+
+.trash-star-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px
+}
+
+.trash-star-recover {
+    padding: 6px 16px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--accent-border, color-mix(in srgb, var(--accent) 55%, transparent));
+    background: transparent;
+    color: var(--accent);
+    font: 600 .76rem var(--font-body);
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease
+}
+
+.trash-star-recover:hover {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--ivory)
+}
+
+.trash-confirm-copy {
+    color: var(--tan-dim);
+    font: 500 .74rem var(--font-body);
+    line-height: 1.4
+}
+
+.trash-confirm-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px
+}
+
+@media (max-width: 700px) {
+    .trash-topbar {
+        flex-wrap: wrap;
+        padding: 18px 20px
+    }
+
+    .trash-heading {
+        position: static;
+        transform: none;
+        order: 3;
+        max-width: none;
+        text-align: left
+    }
+
+    .trash-stage {
+        min-height: 440px;
+        gap: 34px
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .trash-shell::before {
+        animation: none
+    }
+
+    .trash-star.is-dropping {
+        animation: none
+    }
+
+    .trash-star.is-recovering .trash-star-visual {
+        animation: none
+    }
+
+    .trash-star-panel,
+    .trash-star-visual,
+    .trash-star.is-leaving {
+        transition: opacity .18s ease
+    }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    .trash-star-panel,
+    .trash-star.is-active .trash-star-panel {
+        background: rgba(14, 12, 9, .97);
+        backdrop-filter: none
+    }
+}

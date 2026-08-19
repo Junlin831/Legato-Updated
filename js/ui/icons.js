@@ -29,6 +29,9 @@ const ICONS = Object.freeze({
   fastForward: '<path fill="currentColor" stroke="none" d="M3 6.5v11l8-5.5z"/><path fill="currentColor" stroke="none" d="M12 6.5v11l8-5.5z"/>',
   volumeOn: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/>',
   volumeOff: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m17 9 5 6M22 9l-5 6"/>',
+  // A swirling gate — concentric rings around a vanishing point, used only
+  // for the trash portal on the constellation map.
+  portal: '<ellipse cx="12" cy="12" rx="9" ry="5"/><ellipse cx="12" cy="12" rx="5" ry="9"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/>',
 });
 
 export function icon(name, className = '') {
