@@ -247,6 +247,64 @@
     line-height: 1.4
 }
 
+/* Trash portal — a small grey gate tucked in the stage's bottom-right
+   corner, deliberately understated next to the gold stars: it's a doorway
+   out of the constellation, not part of it. Slowly rotates in place so it
+   reads as "alive" (a portal, not a plain icon button) without demanding
+   attention the way a bright hover state would. */
+.constellation-trash-portal {
+    position: absolute;
+    z-index: 2;
+    right: 22px;
+    bottom: 22px;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--tan-dim) 45%, transparent);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--tan-dim) 10%, rgba(10, 9, 18, .55));
+    color: var(--tan-dim);
+    cursor: pointer;
+    transition: color .18s ease, border-color .18s ease, background .18s ease, transform .18s ease
+}
+
+.constellation-trash-portal svg {
+    width: 20px;
+    height: 20px;
+    animation: constellation-portal-spin 14s linear infinite
+}
+
+.constellation-trash-portal:hover,
+.constellation-trash-portal:focus-visible {
+    color: var(--ivory);
+    border-color: color-mix(in srgb, var(--tan-dim) 75%, transparent);
+    background: color-mix(in srgb, var(--tan-dim) 18%, rgba(10, 9, 18, .6));
+    transform: scale(1.06)
+}
+
+.constellation-trash-portal:active {
+    transform: scale(.94)
+}
+
+.constellation-trash-portal:focus-visible {
+    outline: 2px solid var(--tan-dim);
+    outline-offset: 3px
+}
+
+@keyframes constellation-portal-spin {
+    from { transform: rotate(0deg) }
+    to { transform: rotate(360deg) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .constellation-trash-portal,
+    .constellation-trash-portal svg {
+        animation: none;
+        transition: none
+    }
+}
+
 @media (max-width: 700px) {
     .constellation-topbar { padding: 18px 20px }
     .constellation-stage { min-height: 440px }

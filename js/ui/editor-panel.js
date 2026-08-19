@@ -402,6 +402,13 @@ export function mountEditorPanel({ headerContainer, bodyContainer, callbacks }) 
   }
 
   function renderProgression(progression, selectedSeam) {
+    // Rebuilding the list wholesale (replaceChildren + fresh rows below) can
+    // knock scrollTop back to 0 the instant a focused row/toggle is
+    // destroyed — reproducible by clicking "+ Add transition" partway down a
+    // long list. Not worth chasing the exact browser focus-loss quirk;
+    // saving and restoring the scroll position across the rebuild sidesteps
+    // it entirely, whatever the cause.
+    const previousScrollTop = progressionListEl.scrollTop;
     progressionListEl.replaceChildren();
     const isEmpty = !progression.chords.length;
     bodyContainer.classList.toggle('chords-panel-scroll--empty', isEmpty);
@@ -424,6 +431,7 @@ export function mountEditorPanel({ headerContainer, bodyContainer, callbacks }) 
       progressionListEl.append(makeChordRow(progression, chord, index, currentBarRanges[index]));
       if (index < progression.seams.length) progressionListEl.append(makeTransitionSeam(progression, index, selectedSeam));
     });
+    progressionListEl.scrollTop = previousScrollTop;
     reportVisibleBars();
   }
 
