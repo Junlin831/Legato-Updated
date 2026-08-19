@@ -107,7 +107,7 @@ export function createProjectStore({ storage = defaultStorage() } = {}) {
       const found = readAll().find((p) => p.id === id);
       return found ?? null;
     },
-    async createProject({ name = 'Untitled project', progression, folderId = null } = {}) {
+    async createProject({ name = 'Untitled project', progression, folderId = null, sourceDemoId = null } = {}) {
       const now = new Date().toISOString();
       const project = {
         id: newId('p'),
@@ -116,6 +116,10 @@ export function createProjectStore({ storage = defaultStorage() } = {}) {
         updatedAt: now,
         deletedAt: null,
         folderId: folderId && readFolders().some((f) => f.id === folderId) ? folderId : null,
+        // Marks this project as a user's editable copy of a bundled demo, so
+        // reopening the demo star finds and reuses it (see cloneDemo below)
+        // instead of minting a fresh constellation star every time.
+        sourceDemoId,
         progression: progression ?? emptyProgression(),
       };
       const all = readAll();
@@ -133,6 +137,21 @@ export function createProjectStore({ storage = defaultStorage() } = {}) {
       if (!project) return null;
       project.name = name;
       project.updatedAt = new Date().toISOString();
+      const result = writeAll(all);
+      if (!result.ok) throw makeStorageError(result);
+      return project;
+    },
+    /**
+     * Remember where the user dragged a star on the constellation map, so it
+     * stays put across visits instead of settling back to its seeded spot.
+     * Not a content edit — like folder assignment above, `updatedAt` is left
+     * untouched so repositioning a star never reshuffles anything else.
+     */
+    async setMapPosition(id, pos) {
+      const all = readAll();
+      const project = all.find((p) => p.id === id);
+      if (!project) return null;
+      project.mapPosition = pos ?? null;
       const result = writeAll(all);
       if (!result.ok) throw makeStorageError(result);
       return project;
@@ -175,11 +194,20 @@ export function createProjectStore({ storage = defaultStorage() } = {}) {
         folderId: source.folderId ?? null,
       });
     },
+    /**
+     * Opening the demo star clones it into a real, editable project the
+     * first time — but reopening it later reuses that same clone rather
+     * than minting a fresh constellation star on every visit. A trashed
+     * clone doesn't count as "existing": the user discarded it, so opening
+     * the demo again starts a new one.
+     */
     async cloneDemo(demoId, { name } = {}) {
       const demo = DEMO_PROJECTS.find((d) => d.id === demoId);
       if (!demo) return null;
+      const existing = activeSorted(readAll()).find((p) => p.sourceDemoId === demoId);
+      if (existing) return existing;
       const finalName = uniqueName(name ?? demo.name, readAll());
-      return this.createProject({ name: finalName, progression: cloneProgression(demo.progression) });
+      return this.createProject({ name: finalName, progression: cloneProgression(demo.progression), sourceDemoId: demoId });
     },
 
     // ── Folders — device-local project organization ─────────────────────
@@ -383,7 +411,7 @@ function cloneProgression(progression) {
 }
 
 function stripInternalFields(project) {
-  const { deletedAt: _deletedAt, folderId: _folderId, ...rest } = project;
+  const { deletedAt: _deletedAt, folderId: _folderId, mapPosition: _mapPosition, sourceDemoId: _sourceDemoId, ...rest } = project;
   return rest;
 }
 

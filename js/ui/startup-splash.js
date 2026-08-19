@@ -157,14 +157,15 @@ export async function completeStartupHandoff(splash, character, target, {
     target.style.visibility = 'hidden';
     character.style.setProperty('--startup-character-travel-ms', `${ travelMs }ms`);
     character.classList.add('is-travelling');
-    // Commit the pinned starting geometry before changing the destination.
+    // Commit the pinned starting geometry before animating.
     character.getBoundingClientRect();
-    Object.assign(character.style, {
-      left: `${ toRect.left }px`,
-      top: `${ toRect.top }px`,
-      width: `${ toRect.width }px`,
-      height: `${ toRect.height }px`,
-    });
+    // A translate+scale from the pinned rect to the target rect reaches the
+    // same endpoint as animating left/top/width/height directly, but only
+    // ever touches transform — compositor-only, no layout on every frame.
+    character.style.transform = [
+      `translate(${ toRect.left - fromRect.left }px, ${ toRect.top - fromRect.top }px)`,
+      `scale(${ toRect.width / fromRect.width }, ${ toRect.height / fromRect.height })`,
+    ].join(' ');
     if (travelMs) await wait(travelMs);
   }
 

@@ -17,9 +17,12 @@
  * Star positions are derived from each project's id via a seeded PRNG, so
  * the same project always lands in the same spot — the map doesn't
  * reshuffle itself every time a project is renamed or the list refreshes.
- * A star created by clicking empty space is the one exception: its position
- * is pinned to wherever it was clicked (session-local only, not persisted)
- * so it doesn't jump to an unrelated seeded spot on the next render.
+ * Dragging a star (or clicking empty space to place a new one) overrides
+ * that and persists to the project's own `mapPosition` field via
+ * callbacks.onMoveStar, so a manually-arranged layout survives leaving and
+ * returning to the map, not just the current session. The one exception is
+ * the central demo star, which has no backing project to persist to — its
+ * drag stays session-local, same as before.
  */
 import { escapeHtml } from '../util/html.js';
 import { icon } from './icons.js';
@@ -53,40 +56,40 @@ function clamp01(v) {
 
 const LAYOUT_MIN_RADIUS = 0.24;
 const LAYOUT_MAX_RADIUS = 0.94;
-const LAYOUT_MIN_SEPARATION = 0.17;
 
 /**
- * Normalized (-1..1, center 0,0) positions for every surrounding star.
- * Rejection-sampled against already-placed stars for basic collision
- * avoidance — not true physics, just enough that stars don't overlap.
- * `pinned` overrides (from clicking empty space to create a star) skip the
- * random placement entirely and use the exact clicked spot.
+ * Normalized (-1..1, center 0,0) position for every surrounding star.
+ *
+ * Deliberately a pure function of a single id and nothing else — no
+ * collision-avoidance against sibling stars. An earlier version rejection-
+ * sampled each candidate against every other *currently live* star, which
+ * seemed reasonable but meant a star's position depended on which other
+ * stars happened to exist and what order they were processed in — creating
+ * or deleting an unrelated star, or even just the store returning projects
+ * in a different order (autosave bumps a project's updatedAt on every open,
+ * even with no edits, changing sort order), could nudge a completely
+ * unrelated star to a different fallback slot. Sorting the input helped but
+ * didn't close every case (e.g. a newly-created id can sort *before* an
+ * older one, since the id's counter portion resets every page load). Making
+ * placement depend on nothing but the star's own id closes all of those at
+ * once: the same id always lands in the same spot, forever, regardless of
+ * what else is on the map. The trade-off is no explicit anti-overlap check,
+ * but the wide radius/angle spread makes a visible collision rare, and
+ * dragging (which pins a star's position) is always available as a manual
+ * fix for the odd case where two stars do land close together.
  */
 function computeLayout(ids, pinned) {
-  const placed = [{ x: 0, y: 0 }];
   const positions = new Map();
-  ids.forEach((id) => {
+  for (const id of ids) {
     if (pinned.has(id)) {
-      const pos = pinned.get(id);
-      positions.set(id, pos);
-      placed.push(pos);
-      return;
+      positions.set(id, pinned.get(id));
+      continue;
     }
     const rand = mulberry32(hashStringToSeed(id));
-    let best = null;
-    let bestScore = -Infinity;
-    for (let attempt = 0; attempt < 28; attempt += 1) {
-      const angle = rand() * Math.PI * 2;
-      const radius = LAYOUT_MIN_RADIUS + rand() * (LAYOUT_MAX_RADIUS - LAYOUT_MIN_RADIUS);
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius * 0.86;
-      const minDist = Math.min(...placed.map((p) => Math.hypot(p.x - x, p.y - y)));
-      if (minDist >= LAYOUT_MIN_SEPARATION) { best = { x, y }; break; }
-      if (minDist > bestScore) { bestScore = minDist; best = { x, y }; }
-    }
-    positions.set(id, best);
-    placed.push(best);
-  });
+    const angle = rand() * Math.PI * 2;
+    const radius = LAYOUT_MIN_RADIUS + rand() * (LAYOUT_MAX_RADIUS - LAYOUT_MIN_RADIUS);
+    positions.set(id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius * 0.86 });
+  }
   return positions;
 }
 
@@ -142,6 +145,21 @@ const TEMPLATE = `
 `;
 
 const HOVER_RADIUS_PX = 34;
+
+// Keeps a dragged star from being pushed off the stage entirely (pointer
+// capture lets the drag keep tracking past the window edge, where a
+// released star becomes unreachable and effectively lost) AND keeps its
+// glow's own radial-gradient falloff — which fades smoothly to fully
+// transparent at glowRadius (see drawStar) — from being hard-truncated by
+// the <canvas> element's own pixel bounds. A canvas simply cannot draw past
+// its own edge, so if the star's center gets closer to the boundary than
+// glowRadius, the fade gets cut off mid-gradient instead of reaching zero,
+// which reads as a harsh straight-edged clip. Sized to the largest glow any
+// star reaches (central star, boosted: coreRadius 7 * 5.5 * boost 1.35 ≈
+// 52px), with a small buffer — the star itself still sits right at the
+// edge, only its faint outer glow gets the room it needs to fade out
+// naturally instead of looking cut off.
+const STAGE_EDGE_MARGIN_PX = 56;
 
 // Star-birth timeline — three sequential phases, matching the length of the
 // "star born" sound effect rather than the old instant radiating spark:
@@ -265,22 +283,51 @@ export function mountConstellationMap({ container, callbacks }) {
     return { x: (px.x - cx) / scale, y: (px.y - cy) / scale };
   }
 
+  /** Keeps a pixel point (and the margin around it) inside the stage bounds. */
+  function clampToStage(px) {
+    return {
+      x: Math.min(Math.max(px.x, STAGE_EDGE_MARGIN_PX), Math.max(STAGE_EDGE_MARGIN_PX, stageW - STAGE_EDGE_MARGIN_PX)),
+      y: Math.min(Math.max(px.y, STAGE_EDGE_MARGIN_PX), Math.max(STAGE_EDGE_MARGIN_PX, stageH - STAGE_EDGE_MARGIN_PX)),
+    };
+  }
+
+  // Round-tripped through pixel space so it's always relative to the *current*
+  // stage size — a position pinned at a larger window (or from before this
+  // margin existed) still gets pulled back in bounds if the stage has since
+  // shrunk, instead of only being enforced live during a drag.
+  function clampPinnedPosition(pos) {
+    return toNormalized(clampToStage(toPixel(pos)));
+  }
+
   // ── Star list + DOM hit-targets ──────────────────────────────────────
   function buildStars({ recent, demo }) {
     // A star mid-delete-animation stays out of the normal interactive list —
     // it's drawn separately by the dyingStars loop in draw() instead.
     const live = recent.filter((p) => !dyingStars.has(p.id));
+    // A drag persists its result to the project itself (see endDrag below),
+    // so a position saved on an *earlier* visit needs to seed pinnedPositions
+    // here too — not just a same-session drag. Only fills in ids that aren't
+    // already pinned, so an in-progress drag this session always wins.
+    for (const project of live) {
+      if (!pinnedPositions.has(project.id) && project.mapPosition) {
+        pinnedPositions.set(project.id, project.mapPosition);
+      }
+    }
     const ids = live.map((p) => p.id);
     const layout = computeLayout(ids, pinnedPositions);
     const list = [];
     if (demo) {
       // Dragging the central star pins it too, same mechanism as any other
       // star — it just defaults to dead centre until moved.
-      const pos = pinnedPositions.get(demo.id) ?? { x: 0, y: 0 };
+      const pos = pinnedPositions.has(demo.id) ? clampPinnedPosition(pinnedPositions.get(demo.id)) : { x: 0, y: 0 };
       list.push({ id: demo.id, kind: 'central', name: demo.name, pos, project: demo, flares: makeFlares(demo.id), connectTo: null });
     }
     for (const project of live) {
-      list.push({ id: project.id, kind: 'project', name: project.name, pos: layout.get(project.id), project, flares: makeFlares(project.id), connectTo: null });
+      // Only pinned (dragged/placed) positions need the edge clamp — the
+      // seeded fallback is already comfortably inside the stage by
+      // construction (see LAYOUT_MAX_RADIUS above computeLayout).
+      const pos = pinnedPositions.has(project.id) ? clampPinnedPosition(layout.get(project.id)) : layout.get(project.id);
+      list.push({ id: project.id, kind: 'project', name: project.name, pos, project, flares: makeFlares(project.id), connectTo: null });
     }
     assignNearestConnections(list);
     return list;
@@ -351,6 +398,13 @@ export function mountConstellationMap({ container, callbacks }) {
     let dragMoved = false;
     let startX = 0;
     let startY = 0;
+    // Offset between where the pointer grabbed the star and the star's own
+    // center, captured at pointerdown and held for the whole drag — without
+    // it the star's center snaps to the pointer on the first move, which
+    // reads as picking up a *different* object rather than the one actually
+    // grabbed (see apple-design's direct-manipulation guidance).
+    let grabOffsetX = 0;
+    let grabOffsetY = 0;
     let suppressNextClick = false;
 
     btn.addEventListener('pointerdown', (event) => {
@@ -359,6 +413,10 @@ export function mountConstellationMap({ container, callbacks }) {
       dragMoved = false;
       startX = event.clientX;
       startY = event.clientY;
+      const rect = stage.getBoundingClientRect();
+      const starPx = toPixel(star.pos);
+      grabOffsetX = (event.clientX - rect.left) - starPx.x;
+      grabOffsetY = (event.clientY - rect.top) - starPx.y;
       btn.setPointerCapture(dragPointerId);
       cancelScheduledClose();
     });
@@ -374,8 +432,8 @@ export function mountConstellationMap({ container, callbacks }) {
         btn.classList.add('is-dragging');
       }
       const rect = stage.getBoundingClientRect();
-      const px = event.clientX - rect.left;
-      const py = event.clientY - rect.top;
+      const raw = { x: (event.clientX - rect.left) - grabOffsetX, y: (event.clientY - rect.top) - grabOffsetY };
+      const { x: px, y: py } = clampToStage(raw);
       star.pos = toNormalized({ x: px, y: py });
       btn.style.left = `${ px }px`;
       btn.style.top = `${ py }px`;
@@ -389,10 +447,13 @@ export function mountConstellationMap({ container, callbacks }) {
       if (dragMoved) {
         btn.classList.remove('is-dragging');
         draggingId = null;
-        // Session-local, same as a star created by clicking empty space —
-        // not written back to the project, so a reload settles it back to
-        // its seeded spot.
         pinnedPositions.set(star.id, star.pos);
+        // Project stars persist to the project itself so the arrangement
+        // survives leaving and coming back (see buildStars above) — a real
+        // project isn't session-local scratch space the way a click-to-create
+        // star's pin is. The central demo star has no backing project to
+        // write to, so it keeps the old session-only behavior.
+        if (star.kind === 'project') callbacks.onMoveStar(star.id, star.pos);
         assignNearestConnections(stars);
         // The pointerup that ends a drag still synthesizes a `click` right
         // after — without this it would immediately reopen the project the
@@ -425,13 +486,12 @@ export function mountConstellationMap({ container, callbacks }) {
   // move sidesteps DOM z-order entirely: "nearest" is a continuous function
   // of cursor position that flips cleanly at the midpoint between two stars,
   // never chaotically.
-  starsLayer.addEventListener('pointermove', (event) => {
-    // A star being dragged is driving focusedId/its own position directly —
-    // don't let nearest-star hover detection fight it for control.
-    if (draggingId != null || isOpening) return;
-    const rect = stage.getBoundingClientRect();
-    const mx = event.clientX - rect.left;
-    const my = event.clientY - rect.top;
+  //
+  // Shared with the shell-level click handler below (see its comment) so
+  // "this reads as hovering a star" and "this reads as clicking a star" are
+  // answered by the exact same math — a click can never land in a dead zone
+  // that looks hoverable but silently falls through to empty-space handling.
+  function nearestStarTo(mx, my) {
     let nearest = null;
     let nearestDist = Infinity;
     for (const star of stars) {
@@ -440,6 +500,22 @@ export function mountConstellationMap({ container, callbacks }) {
       const d = Math.hypot(px.x - mx, px.y - my);
       if (d < nearestDist) { nearestDist = d; nearest = star; }
     }
+    return { star: nearest, dist: nearestDist };
+  }
+
+  starsLayer.addEventListener('pointermove', (event) => {
+    // Touch has no hover concept — a tap's own pointermove between
+    // pointerdown and the click firing would otherwise flash the hover panel
+    // open (and play the hover sound) right before openStar() navigates
+    // away. Mirrors the CSS `@media (hover: hover)` gate for JS-driven hover.
+    if (event.pointerType === 'touch') return;
+    // A star being dragged is driving focusedId/its own position directly —
+    // don't let nearest-star hover detection fight it for control.
+    if (draggingId != null || isOpening) return;
+    const rect = stage.getBoundingClientRect();
+    const mx = event.clientX - rect.left;
+    const my = event.clientY - rect.top;
+    const { star: nearest, dist: nearestDist } = nearestStarTo(mx, my);
     if (nearest && nearestDist <= HOVER_RADIUS_PX) {
       cancelScheduledClose();
       if (hoveredId !== nearest.id) {
@@ -659,12 +735,28 @@ export function mountConstellationMap({ container, callbacks }) {
     if (isOpening) return;
     const path = event.composedPath();
     if (path.some((el) => el.classList?.contains('constellation-star') || el.classList?.contains('constellation-focus-panel'))) return;
-    const wasFocused = focusedId;
-    clearFocus();
-    if (wasFocused) return; // this click's job was to back out; don't also create
     const stageRect = stage.getBoundingClientRect();
     const withinStage = event.clientX >= stageRect.left && event.clientX <= stageRect.right
       && event.clientY >= stageRect.top && event.clientY <= stageRect.bottom;
+    // A star's clickable button is only 24px-radius, but its glow/hover
+    // highlight reads as "on the star" out to HOVER_RADIUS_PX — a click that
+    // lands in that gap used to fall straight through to "empty space" and
+    // silently spawn a brand new project right next to the one the user
+    // actually meant to open. Reusing the same nearest-star hit test the
+    // hover feedback already uses means a click can never land somewhere
+    // that *looked* like a star but wasn't treated as one.
+    if (withinStage) {
+      const mx = event.clientX - stageRect.left;
+      const my = event.clientY - stageRect.top;
+      const { star: nearest, dist: nearestDist } = nearestStarTo(mx, my);
+      if (nearest && nearestDist <= HOVER_RADIUS_PX) {
+        openStar(nearest);
+        return;
+      }
+    }
+    const wasFocused = focusedId;
+    clearFocus();
+    if (wasFocused) return; // this click's job was to back out; don't also create
     if (withinStage) {
       handleEmptySpaceClick(event.clientX - stageRect.left, event.clientY - stageRect.top);
     }

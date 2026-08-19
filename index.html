@@ -8,13 +8,6 @@
     content="LEGATO is a chord progression composer for building, hearing, and notating chord transitions.">
   <title>LEGATO — Progression Composer</title>
   <link rel="stylesheet" href="/css/styles.css">
-  <script>
-    // Mark reloads before the first paint so the startup overture never
-    // flashes when the user refreshes the current page.
-    if (performance.getEntriesByType('navigation')[0]?.type === 'reload') {
-      document.documentElement.dataset.legatoNavigation = 'reload';
-    }
-  </script>
 </head>
 
 <body>
@@ -30,13 +23,11 @@
           <img src="/assets/brand/legato-icon.png" alt="" draggable="false">
           <span>LEGATO</span>
         </div>
-        <span class="startup-splash-workspace">Composition workspace</span>
       </header>
 
       <div class="startup-splash-content">
         <img class="startup-splash-character" src="/assets/brand/legato-icon.png" alt="" draggable="false">
         <p id="startup-splash-message" class="startup-splash-message">Take your time. We&rsquo;ll find the way forward.</p>
-        <p class="startup-splash-status">Preparing your composition workspace&hellip;</p>
 
         <div class="startup-splash-score-stage" data-particle-stage aria-hidden="true">
           <svg class="startup-splash-score" viewBox="0 0 920 76" style="color: #d1a15a">

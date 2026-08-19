@@ -258,3 +258,10 @@
         transition: none
     }
 }
+
+@media (prefers-reduced-transparency: reduce) {
+    .constellation-focus-panel {
+        background: rgba(16, 14, 30, .96);
+        backdrop-filter: none
+    }
+}

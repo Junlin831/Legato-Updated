@@ -24,95 +24,240 @@
 }
 
 .app-shell {
-    --panel-splitter-width: 12px;
-    display: grid;
-    grid-template-columns: var(--editor-pane-width, minmax(410px, 38vw)) var(--panel-splitter-width) minmax(0, 1fr);
-    min-height: 100vh;
-    transition: grid-template-columns .32s cubic-bezier(.2, .7, .2, 1)
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh
 }
 
-/* Dragging the splitter or actively resizing should track the pointer
-   instantly — only the deliberate collapse/expand click gets the eased
-   transition above. */
-.app-shell.is-resizing {
+/* Persistent brand + project-title bar — always visible, never collapses.
+   Also what the startup handoff animation targets (see main.js /
+   startup-splash.js): keeping the brand-mark outside any collapsible
+   container is what makes that handoff always land somewhere real. */
+.editor-topbar {
+    position: relative;
+    z-index: 2;
+    flex: none
+}
+
+#sheet-music-pane-mount {
+    flex: 1;
+    min-height: 0
+}
+
+/* Floating "Chords" card — a picture-in-picture window, not docked to any
+   edge (see js/ui/chords-floating-panel.js). The wrapper is what's actually
+   positioned and dragged (inline left/top set by the JS drag logic); the
+   card and the bar-number minimap (see .chords-minimap below) are its two
+   children, so the minimap travels with every drag for free. Always in the
+   DOM; `.is-open` toggles visibility via opacity/scale rather than mount/
+   unmount so repeated open/close doesn't restart layout. */
+.chords-floating-wrapper {
+    position: fixed;
+    z-index: 30;
+    opacity: 0;
+    transform: scale(.96);
+    pointer-events: none;
+    transition: opacity .2s cubic-bezier(.2, .8, .2, 1), transform .2s cubic-bezier(.2, .8, .2, 1)
+}
+
+.chords-floating-wrapper.is-open {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto
+}
+
+.chords-floating-wrapper.is-dragging {
     transition: none
 }
 
-/* While collapsed, the editor pane's own padded content would otherwise
-   overflow its zero-width grid track and force a horizontal scrollbar. */
-.app-shell.is-editor-collapsed #editor-pane-mount {
-    overflow: hidden
-}
-
-/* A visible seam with a wider hit target makes the workspace proportions
-   directly adjustable without taking space away from either panel. */
-/* No visible line down the seam — it fought visually with the collapse
-   toggle sitting on top of it. The strip is still a full-height drag target
-   (cursor: col-resize) and the toggle button remains the one visible
-   affordance on this seam. */
-.panel-resizer {
+.chords-floating-card {
     position: relative;
-    z-index: 10;
-    cursor: col-resize;
-    touch-action: none;
-    outline: none
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-card);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .45)
 }
 
-.app-shell.is-resizing,
-.app-shell.is-resizing * {
-    cursor: col-resize !important;
+.chords-floating-header {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 8px 12px 16px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--panel-3);
+    cursor: grab;
+    touch-action: none;
     user-select: none
 }
 
-/* Collapse/expand handle — a small circular bump centered on the seam so it
-   stays reachable no matter how narrow either pane currently is. */
-.panel-collapse-toggle {
-    position: absolute;
-    z-index: 11;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+.chords-floating-wrapper.is-dragging .chords-floating-header {
+    cursor: grabbing
+}
+
+.chords-floating-title {
+    color: var(--ivory);
+    font: 700 .82rem var(--font-body);
+    letter-spacing: .04em
+}
+
+.chords-floating-collapse {
+    flex: none;
     display: grid;
     place-items: center;
-    width: 22px;
-    height: 40px;
+    width: 26px;
+    height: 26px;
     padding: 0;
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-pill);
-    background: var(--panel-2);
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
     color: var(--tan-dim);
     cursor: pointer;
-    transition: color .15s ease, border-color .15s ease, background .15s ease
+    transition: color .15s ease, background .15s ease, transform .32s cubic-bezier(.2, .7, .2, 1)
 }
 
-.panel-collapse-toggle:hover,
-.panel-collapse-toggle:focus-visible {
+.chords-floating-collapse:hover,
+.chords-floating-collapse:focus-visible {
     color: var(--ivory);
-    border-color: var(--accent-border);
-    background: var(--accent-soft)
+    background: color-mix(in srgb, var(--accent) 16%, transparent)
 }
 
-.panel-collapse-toggle:focus-visible {
+.chords-floating-collapse:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px
 }
 
-.panel-collapse-toggle svg {
-    width: 13px;
-    height: 13px;
-    transition: transform .32s cubic-bezier(.2, .7, .2, 1)
+.chords-floating-collapse svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round
 }
 
-.app-shell.is-editor-collapsed .panel-collapse-toggle svg {
-    transform: rotate(180deg)
+.chords-floating-card.is-collapsed .chords-floating-collapse svg {
+    transform: rotate(-90deg)
 }
 
-@media(max-width:1000px) {
-    .app-shell {
-        grid-template-columns: 1fr
+.chords-floating-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden
+}
+
+/* The card's own inline height (see chords-floating-panel.js) is fixed
+   while open so it doesn't reflow as content changes; collapsing overrides
+   that to shrink to just the header instead of leaving blank space below
+   a still-460px-tall card. */
+.chords-floating-card.is-collapsed {
+    height: auto !important
+}
+
+.chords-floating-card.is-collapsed .chords-floating-body {
+    flex: none;
+    height: 0
+}
+
+/* Bar-number minimap — a small "field of view" grid glued to the top-left
+   side of the card (see js/ui/chords-minimap.js). Every bar gets a cell, laid
+   out in fixed-width rows (no scroll of its own — the whole progression is
+   always shown, growing downward as bars are added). `.is-visible` cells
+   track whichever chords are currently scrolled into view in the real chord
+   list (see editor-panel.js's reportVisibleBars), acting like a scrollbar
+   thumb for the list rather than a separately-scrollable view. Positioned
+   with `left` (not `right`) so its own top-left corner never moves as it
+   grows. A sibling of .chords-floating-card rather than a child, so it isn't
+   clipped by the card's own `overflow: hidden`. */
+.chords-minimap {
+    --minimap-cell: 27px;
+    /* Overridden inline by chords-minimap.js to match measuresPerSystem —
+       this default only covers the instant before the first real layout
+       callback ever fires. */
+    --minimap-columns: 4;
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: calc(var(--minimap-cell) * var(--minimap-columns) * -1 - 8px);
+    width: calc(var(--minimap-cell) * var(--minimap-columns));
+    display: grid;
+    grid-template-columns: repeat(var(--minimap-columns), var(--minimap-cell));
+    background: var(--panel);
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: var(--radius-cell);
+    box-shadow: -10px 14px 30px rgba(0, 0, 0, .32)
+}
+
+.chords-minimap-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--minimap-cell);
+    border-right: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    color: var(--accent);
+    font: 600 .62rem var(--font-body);
+    letter-spacing: .02em;
+    transition: background .15s ease, color .15s ease
+}
+
+/* Marked by chords-minimap.js on whichever cell actually ends its row —
+   :nth-child(4n) would silently drift back out of sync the moment the real
+   sheet's own per-line bar count differs from a hardcoded 4. */
+.chords-minimap-bar.is-row-end {
+    border-right: 0
+}
+
+.chords-minimap-bar.is-visible {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+    color: var(--ivory)
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chords-floating-wrapper,
+    .chords-floating-collapse svg,
+    .chords-minimap-bar {
+        transition: none
+    }
+}
+
+@media (max-width: 560px) {
+    /* A freely-dragged card is harder to reach reliably on a small touch
+       viewport — pin it full-width near the top instead, still floating
+       (not docked/resizing the sheet) but no longer draggable off-edge. */
+    .chords-floating-wrapper {
+        left: 12px !important;
+        right: 12px;
+        top: 12px !important;
     }
 
-    .panel-resizer {
+    .chords-floating-card {
+        width: auto !important;
+        height: auto !important;
+        max-height: 70vh
+    }
+
+    .chords-floating-header {
+        cursor: default
+    }
+
+    .chords-floating-wrapper.is-dragging .chords-floating-header {
+        cursor: default
+    }
+
+    /* No room beside the card on a narrow viewport, and dragging is
+       disabled here anyway — the minimap would just sit clipped off the
+       edge of the screen. */
+    .chords-minimap {
         display: none
     }
 }

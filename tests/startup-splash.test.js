@@ -96,7 +96,7 @@ test('handoff hides the destination until the moving character arrives', async (
   });
 
   assert.equal(characterClasses.has('is-travelling'), true);
-  assert.equal(character.style.left, '100px');
+  assert.equal(character.style.transform, 'translate(-500px, -180px) scale(1, 1)');
   assert.equal(target.style.visibility, 'visible');
   assert.equal(splashClasses.has('is-revealing'), true);
   assert.equal(waits.at(-1), STARTUP_SPLASH_REVEAL_MS);

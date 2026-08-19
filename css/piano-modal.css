@@ -452,3 +452,16 @@ dialog::backdrop {
         grid-template-columns: 1fr;
     }
 }
+
+@media (prefers-reduced-motion: reduce) {
+    .piano-key.quality-tone:not(.selected)::after {
+        animation: none
+    }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    dialog::backdrop {
+        background: rgba(5, 4, 3, .97);
+        backdrop-filter: none
+    }
+}

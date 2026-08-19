@@ -2,40 +2,16 @@
    .dialog-footer chrome from piano-modal.css. Only layout specific to this
    modal lives here. */
 
-/* This dialog deliberately uses a wide, two-column composition: the score and
-   theme controls form a compact vertical column while the circle of fifths has
-   a panel of its own. */
+/* This dialog deliberately uses a wide, two-column composition: the score
+   controls form a compact vertical column while the circle of fifths has a
+   panel of its own. Chord symbols render in the app's one fixed display
+   font (see --font-chord in base.css); its glyphs need a smaller scale than
+   body text to sit comfortably within the circle-of-fifths wedges. */
 #project-settings-dialog {
     width: min(1220px, calc(100vw - 32px));
     max-width: none;
     max-height: calc(100vh - 32px);
     overflow: hidden;
-}
-
-/* The settings dialog previews its pending chord-font choice before it is
-   saved to the project, so note and key labels always match that choice. */
-#project-settings-dialog[data-chord-font="jazztext"] {
-    --font-chord: var(--font-chord-jazz);
-    --font-chord-style: normal;
-    --font-chord-weight: 700;
-}
-
-#project-settings-dialog[data-chord-font="classical"] {
-    --font-chord: var(--font-chord-classical);
-    --font-chord-style: normal;
-    --font-chord-weight: 700;
-    /* Edwin's wider glyphs need a slightly smaller scale to sit comfortably
-       within the circle-of-fifths wedges. */
-    --fs-wedge-major: .88rem;
-    --fs-wedge-minor: .68rem;
-}
-
-#project-settings-dialog[data-chord-font="scifi"] {
-    --font-chord: var(--font-chord-scifi);
-    --font-chord-style: normal;
-    --font-chord-weight: 800;
-    /* Orbitron's wide geometric glyphs need an even smaller scale than
-       Edwin's to sit comfortably within the circle-of-fifths wedges. */
     --fs-wedge-major: .82rem;
     --fs-wedge-minor: .64rem;
 }
@@ -44,11 +20,11 @@
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 22px;
     max-height: calc(100vh - 32px);
     overflow-y: auto;
     box-sizing: border-box;
-    padding: 26px 28px;
+    padding: 30px 34px;
 }
 
 .project-settings-shell .dialog-header {
@@ -60,16 +36,16 @@
     font-family: var(--font-body);
     font-weight: 600;
     font-style: normal;
-    font-size: 2.45rem;
+    font-size: 2.1rem;
     line-height: 1;
-    letter-spacing: -.045em;
+    letter-spacing: -.03em;
 }
 
 .project-settings-body {
     display: grid;
-    grid-template-columns: minmax(430px, .92fr) minmax(570px, 1.08fr);
+    grid-template-columns: minmax(400px, .92fr) minmax(500px, 1.08fr);
     align-items: stretch;
-    gap: 26px;
+    gap: 28px;
 }
 
 .project-settings-controls {
@@ -81,19 +57,19 @@
 .project-settings-name {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 8px;
     color: var(--tan-dim);
-    font: 400 var(--fs-label) var(--font-body);
+    font: 400 var(--fs-eyebrow) var(--font-body);
     text-transform: uppercase;
     letter-spacing: .1em;
 }
 
 .project-settings-name input {
-    padding: 14px 12px 10px;
+    padding: 13px 14px;
     border: 1px solid var(--hairline);
     background: var(--panel-3);
     color: var(--ivory);
-    font: var(--font-chord-weight) 1.2rem var(--font-chord);
+    font: var(--font-chord-weight) 1.3rem var(--font-chord);
     font-style: var(--font-chord-style);
     line-height: 1.2;
     outline: none;
@@ -112,37 +88,19 @@
 .project-settings-shell .settings-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 12px;
 }
 
 .project-settings-shell .settings-grid label {
     display: grid;
-    grid-template-columns: 82px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr);
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     color: var(--tan-dim);
-    font: 400 var(--fs-label) var(--font-body);
+    font: 400 var(--fs-eyebrow) var(--font-body);
     text-transform: uppercase;
     letter-spacing: .1em;
 }
-
-/* Creation pairs meter-type + time-signature on one row (they narrow each
-   other conceptually), then gives tempo and clef their own full-width rows
-   so the tempo slider has enough horizontal room. */
-.project-settings-shell .settings-grid.is-create {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-        "meter-type meter"
-        "tempo tempo"
-        "clef clef";
-    column-gap: 18px;
-    row-gap: 10px;
-}
-
-.project-settings-shell .settings-grid.is-create #project-settings-meter-type-field { grid-area: meter-type; }
-.project-settings-shell .settings-grid.is-create #project-settings-meter-field { grid-area: meter; }
-.project-settings-shell .settings-grid.is-create #project-settings-tempo-field { grid-area: tempo; }
-.project-settings-shell .settings-grid.is-create #project-settings-clef-field { grid-area: clef; }
 
 /* Selects and the tempo widget use the shared .form-select / .tempo-control
    primitives defined in base.css. No modal-local overrides needed. */
@@ -150,28 +108,28 @@
 /* Key signature — dial */
 .key-signature-fieldset {
     border: 1px solid var(--hairline);
-    padding: 18px 20px 20px;
+    padding: 20px 22px 22px;
     margin: 0;
     display: grid;
     align-content: center;
-    gap: 10px;
+    gap: 12px;
     border-radius: var(--radius-cell);
 }
 
 .key-signature-fieldset legend {
     padding: 0 8px;
     color: var(--tan-dim);
-    font: 400 var(--fs-label) var(--font-body);
+    font: 400 var(--fs-eyebrow) var(--font-body);
     text-transform: uppercase;
     letter-spacing: .1em;
 }
 
 .key-dial-container {
     display: grid;
-    grid-template-columns: 300px minmax(150px, 1fr);
+    grid-template-columns: 300px minmax(170px, 1fr);
     align-items: center;
     justify-items: start;
-    gap: 16px;
+    gap: 18px;
 }
 
 .key-dial {
@@ -219,6 +177,13 @@
     user-select: none;
 }
 
+/* The three enharmonic labels ("Db / C#" etc.) are much wider strings than
+   the rest of the wheel — at the shared wedge-major size they overrun their
+   30°-wide slice and spill past the dial's own boundary. Shrink just these. */
+.key-wedge-major--long {
+    font-size: calc(var(--fs-wedge-major) * .74);
+}
+
 .key-wedge-minor {
     font: var(--font-chord-weight) var(--fs-wedge-minor) var(--font-chord);
     font-style: var(--font-chord-style);
@@ -240,7 +205,7 @@
 
 .key-dial-readout {
     display: grid;
-    gap: 4px;
+    gap: 5px;
     align-self: center;
     justify-items: start;
     text-align: left;
@@ -252,71 +217,91 @@
 
 .key-dial-readout strong {
     color: var(--ivory);
-    font: var(--font-chord-weight) 1.45rem/1.05 var(--font-chord);
+    font: var(--font-chord-weight) 1.6rem/1.05 var(--font-chord);
     font-style: var(--font-chord-style);
     letter-spacing: -.005em;
 }
 
 .key-dial-readout small {
     color: var(--tan-dim);
-    font: 400 .84rem var(--font-body);
+    font: 400 .92rem var(--font-body);
 }
 
-/* Theme fieldset — mood picker (5 accent swatches) + chord-symbol font toggle.
-   Shares fieldset chrome with .key-signature-fieldset above. */
-.theme-fieldset {
+/* Chord card style — density picker + a live sample card below it, built
+   from the exact same markup/classes as a real chord row (see
+   css/editor-pane.css) so the preview is a true 1:1 of what the editor will
+   look like, not an approximation. */
+.chord-density-fieldset {
     border: 1px solid var(--hairline);
-    padding: 18px 20px 20px;
+    padding: 20px 22px 22px;
     margin: 0;
     display: grid;
-    gap: 15px;
+    gap: 16px;
     border-radius: var(--radius-cell);
 }
 
-.theme-fieldset legend {
+.chord-density-fieldset legend {
     padding: 0 8px;
     color: var(--tan-dim);
-    font: 400 var(--fs-label) var(--font-body);
+    font: 400 var(--fs-eyebrow) var(--font-body);
     text-transform: uppercase;
     letter-spacing: .1em;
 }
 
-.theme-field {
-    display: grid;
-    gap: 10px;
+.density-picker {
+    display: inline-flex;
+    padding: 3px;
+    background: var(--panel-3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill);
+    width: fit-content;
 }
 
-.theme-field-label {
-    margin: 0;
+.density-option {
+    padding: 9px 20px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: transparent;
     color: var(--tan-dim);
-    font: 500 var(--fs-label) var(--font-body);
-    text-transform: uppercase;
-    letter-spacing: .12em;
-}
-
-.accent-picker {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-}
-
-.accent-swatch {
-    --swatch-ring: transparent;
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    border-radius: 50%;
-    border: 2px solid var(--swatch-ring);
-    box-shadow: 0 0 0 2px var(--panel);
+    font: 600 .92rem var(--font-body);
+    letter-spacing: .02em;
     cursor: pointer;
-    transition: transform .15s ease, box-shadow .15s ease;
+    transition: background .15s ease, color .15s ease;
 }
 
-.accent-swatch:hover {
-    transform: scale(1.08);
+.density-option:hover:not(.is-active) {
+    color: var(--ivory);
 }
 
-/* .chord-font-toggle / .chord-font-option styles live in css/base.css. */
+.density-option.is-active {
+    background: var(--accent);
+    color: var(--ink);
+}
+
+/* Wraps a real .progression-list so it renders the actual card CSS, but
+   contained to one sample row instead of the scrollable, bottom-padded list
+   the real editor uses. */
+.chord-density-preview {
+    padding: 18px;
+    background: var(--panel-3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-cell);
+}
+
+.chord-density-preview .progression-list {
+    display: block;
+    padding-bottom: 0;
+    overflow: visible;
+}
+
+.chord-density-preview .chord-row {
+    cursor: default;
+}
+
+.chord-density-preview .chord-drag-handle,
+.chord-density-preview .delete-button {
+    cursor: default;
+}
 
 /* Keep the save action visible while longer settings content scrolls. */
 .project-settings-shell .dialog-footer {
@@ -332,9 +317,9 @@
     box-shadow: 0 -12px 20px var(--panel);
 }
 
-@media (max-width: 1140px) {
+@media (max-width: 1280px) {
     #project-settings-dialog {
-        width: min(680px, calc(100vw - 32px));
+        width: min(720px, calc(100vw - 32px));
     }
 
     .project-settings-body {
@@ -375,15 +360,6 @@
         grid-template-columns: 1fr;
         align-items: stretch;
         gap: 7px;
-    }
-
-    .project-settings-shell .settings-grid.is-create {
-        grid-template-columns: 1fr;
-        grid-template-areas:
-            "meter-type"
-            "meter"
-            "tempo"
-            "clef";
     }
 
     .key-dial-container {

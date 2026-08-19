@@ -58,7 +58,7 @@
     color: var(--tan-dim);
     font: 600 .82rem var(--font-body);
     letter-spacing: 0;
-    transition: color .15s ease, border-color .15s ease
+    transition: color .15s ease, border-color .15s ease, transform .1s ease-out
 }
 
 .stop-button .ui-icon {
@@ -69,4 +69,8 @@
 .stop-button:hover:not(:disabled) {
     color: var(--ivory);
     border-color: color-mix(in srgb, var(--ivory) 28%, transparent)
+}
+
+.stop-button:active:not(:disabled) {
+    transform: scale(.97)
 }

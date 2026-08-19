@@ -16,10 +16,6 @@
     transition: opacity 220ms ease
 }
 
-html[data-legato-navigation="reload"] .startup-splash {
-    display: none
-}
-
 .startup-splash.is-revealing {
     opacity: 0;
     pointer-events: none
@@ -27,14 +23,12 @@ html[data-legato-navigation="reload"] .startup-splash {
 
 .startup-splash-header,
 .startup-splash-message,
-.startup-splash-status,
 .startup-splash-score-stage {
     transition: opacity 220ms ease
 }
 
 .startup-splash.is-handoff .startup-splash-header,
 .startup-splash.is-handoff .startup-splash-message,
-.startup-splash.is-handoff .startup-splash-status,
 .startup-splash.is-handoff .startup-splash-score-stage {
     opacity: 0
 }
@@ -65,14 +59,6 @@ html[data-legato-navigation="reload"] .startup-splash {
     object-fit: contain
 }
 
-.startup-splash-workspace {
-    margin-left: auto;
-    color: var(--tan-dim);
-    font: 500 .6rem var(--font-mono);
-    text-transform: uppercase;
-    letter-spacing: .18em
-}
-
 .startup-splash-content {
     position: absolute;
     inset: 70px 0 0;
@@ -96,11 +82,11 @@ html[data-legato-navigation="reload"] .startup-splash {
 .startup-splash-character.is-travelling {
     z-index: 2;
     object-fit: contain;
-    transition:
-        left var(--startup-character-travel-ms) cubic-bezier(.22, .72, .2, 1),
-        top var(--startup-character-travel-ms) cubic-bezier(.22, .72, .2, 1),
-        width var(--startup-character-travel-ms) cubic-bezier(.22, .72, .2, 1),
-        height var(--startup-character-travel-ms) cubic-bezier(.22, .72, .2, 1)
+    /* transform-only — left/top/width/height would hit layout every frame for
+       up to 1.4s. The JS computes a translate+scale from the pinned rect to
+       the destination rect instead of moving the box itself. */
+    transform-origin: 0 0;
+    transition: transform var(--startup-character-travel-ms) cubic-bezier(.22, .72, .2, 1)
 }
 
 .startup-splash-message {
@@ -109,14 +95,6 @@ html[data-legato-navigation="reload"] .startup-splash {
     color: var(--ivory);
     font: 340 clamp(1.8rem, 3vw, 2.75rem)/1.18 var(--font-display);
     letter-spacing: -.025em
-}
-
-.startup-splash-status {
-    margin: 22px 0 0;
-    color: var(--tan-dim);
-    font: 500 .65rem var(--font-mono);
-    text-transform: uppercase;
-    letter-spacing: .2em
 }
 
 .startup-splash-score-stage {
@@ -181,10 +159,6 @@ html[data-legato-navigation="reload"] .startup-splash {
         padding: 14px 22px
     }
 
-    .startup-splash-workspace {
-        display: none
-    }
-
     .startup-splash-content {
         padding-inline: 22px
     }
@@ -199,7 +173,6 @@ html[data-legato-navigation="reload"] .startup-splash {
     .startup-splash-character,
     .startup-splash-header,
     .startup-splash-message,
-    .startup-splash-status,
     .startup-splash-score-stage {
         animation: none;
         transition: none

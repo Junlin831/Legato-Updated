@@ -1,42 +1,30 @@
 /**
- * Right-side sheet music surface: VexFlow SVG with a compact corner zoom
- * control, and the transport row (play/stop plus session-only tempo/clef
- * overrides).
+ * Sheet music surface: VexFlow SVG (scrollable, no zoom control) plus the
+ * transport row (play/stop plus a session-only tempo override).
  *
- * Tempo and clef controls here are session-only overrides: they never mutate
- * the project's persistent settings. When the persistent tempo/clef change
+ * The tempo control here is a session-only override: it never mutates the
+ * project's persistent settings. When the persistent tempo changes
  * externally (via project settings), the override is cleared so the panel
- * reflects the new source of truth.
+ * reflects the new source of truth. Clef is only ever set via project
+ * settings now — no quick-access override here.
  *
  * The transport row is a sibling inside <main class="sheet-music-pane">;
- * this module exposes its mount point for editor-view.
+ * this module exposes its mount point for editor-view. Going home is handled
+ * by editor-view's persistent top brand bar; opening the floating Chords
+ * panel is handled by editor-view via the `onToggleChordsPanel` callback.
+ * `onNotationLayoutChange` fires on every redraw with the measure count and
+ * how many bars each system holds, so the FOV minimap's own row-wrapping can
+ * mirror the real sheet (see chords-minimap.js) instead of drifting from it.
  */
 import { renderNotation } from '../sheet-music/render.js';
 import { createSheetMusicParticles } from '../sheet-music/particles.js';
 import { TEMPO_MIN, TEMPO_MAX } from '../state.js';
 import { icon } from './icons.js';
 
-const ZOOM_MIN = 0.7;
-const ZOOM_MAX = 1.5;
-const ZOOM_STEP = 0.1;
-// Continuous wheel zoom. One wheel notch (~100 units of deltaY on most mice
-// under DOM_DELTA_PIXEL) moves the zoom ~2%, so five notches = one 10% step.
-const WHEEL_ZOOM_FACTOR = 0.0005;
-const WHEEL_DELTA_LINE_PX = 16;
-const WHEEL_DELTA_PAGE_PX = 800;
-
 const TEMPLATE = `
 <section class="notation-stage" aria-label="Progression notation">
-  <button id="sheet-music-home" class="sheet-music-home" type="button" aria-label="Back to your constellation" title="Back to your constellation">
-    <img src="/assets/brand/legato-mark.png" alt="" draggable="false">
-  </button>
   <div class="notation-stage-toolbar">
-    <button id="sheet-music-fast-return" class="sheet-music-fast-return" type="button" aria-label="Hold to speed up particles drifting back into place" title="Hold to speed up return">${ icon('fastForward') }</button>
-    <div class="sheet-music-zoom-control" role="group" aria-label="Zoom">
-      <button id="sheet-music-zoom-out" type="button" aria-label="Zoom out">${ icon('minus') }</button>
-      <output id="sheet-music-zoom-value" aria-live="polite">100%</output>
-      <button id="sheet-music-zoom-in" type="button" aria-label="Zoom in">${ icon('plus') }</button>
-    </div>
+    <button id="chords-panel-toggle" class="chords-panel-toggle" type="button" aria-label="Open chords panel" aria-pressed="false">${ icon('density') }</button>
   </div>
   <div class="staff-glow" aria-hidden="true"></div>
   <div id="sheet-music-layer" class="sheet-music-layer">
@@ -57,14 +45,6 @@ const TEMPLATE = `
         <small>BPM</small>
       </div>
     </label>
-    <label>
-      <span>Clef</span>
-      <select id="sheet-music-clef" class="form-select">
-        <option value="auto">Auto</option>
-        <option value="treble">Treble</option>
-        <option value="bass">Bass</option>
-      </select>
-    </label>
   </div>
 </div>
 `;
@@ -73,32 +53,14 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   container.classList.add('sheet-music-pane');
   container.innerHTML = TEMPLATE;
 
-  const homeBtn = container.querySelector('#sheet-music-home');
-  homeBtn.onclick = () => callbacks.onGoHome?.();
-
   const sheetMusicEl = container.querySelector('#sheet-music');
-  const zoomValueEl = container.querySelector('#sheet-music-zoom-value');
-  const zoomOutBtn = container.querySelector('#sheet-music-zoom-out');
-  const zoomInBtn = container.querySelector('#sheet-music-zoom-in');
-  const layerEl = container.querySelector('#sheet-music-layer');
-  const notationStageEl = container.querySelector('.notation-stage');
   const particlesCanvas = container.querySelector('#sheet-music-particles');
   const particles = createSheetMusicParticles(particlesCanvas);
-  const fastReturnBtn = container.querySelector('#sheet-music-fast-return');
-  // Hold-to-fast-forward: only meaningful while the button is actually
-  // pressed, so every way a press can end (mouse-up, drag-off, cancel) must
-  // release it — an event left unhandled would strand particles sped up.
-  const startFastReturn = () => particles.setFastReturn(true);
-  const stopFastReturn = () => particles.setFastReturn(false);
-  fastReturnBtn.addEventListener('pointerdown', startFastReturn);
-  fastReturnBtn.addEventListener('pointerup', stopFastReturn);
-  fastReturnBtn.addEventListener('pointerleave', stopFastReturn);
-  fastReturnBtn.addEventListener('pointercancel', stopFastReturn);
+  const chordsPanelToggleBtn = container.querySelector('#chords-panel-toggle');
+  chordsPanelToggleBtn.addEventListener('click', () => callbacks.onToggleChordsPanel?.());
   const tempoSliderEl = container.querySelector('#sheet-music-tempo-slider');
   const tempoInputEl = container.querySelector('#sheet-music-tempo-input');
-  const clefSelectEl = container.querySelector('#sheet-music-clef');
 
-  let zoom = 1;
   let resizeFrame = 0;
   let currentSegments = [];
   let baseSettings = null;
@@ -106,14 +68,14 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   let currentChords = [];
   let activeMeasure = null;
   let overrideTempo = null;
-  let overrideClef = null;
+  let measureCount = 0;
+  let measuresPerSystem = 1;
 
   function computeEffectiveSettings() {
     if (!baseSettings) return null;
     return {
       ...baseSettings,
       tempo: overrideTempo ?? baseSettings.tempo,
-      clef: overrideClef ?? baseSettings.clef,
     };
   }
 
@@ -126,15 +88,26 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   function setPlaybackControlsDisabled(disabled) {
     tempoSliderEl.disabled = disabled;
     tempoInputEl.disabled = disabled;
-    clefSelectEl.disabled = disabled;
     container.querySelector('.sheet-music-controls')?.classList.toggle('is-disabled', disabled);
   }
 
   function drawSheetMusic() {
-    if (!effectiveSettings) return { measureCount: 0, layout: [] };
+    if (!effectiveSettings) {
+      measureCount = 0;
+      measuresPerSystem = 1;
+      callbacks.onNotationLayoutChange?.({ measureCount, measuresPerSystem });
+      return { measureCount: 0, layout: [], measuresPerSystem: 1 };
+    }
     const result = renderNotation(sheetMusicEl, currentSegments, effectiveSettings, currentChords);
+    measureCount = result.measureCount;
+    measuresPerSystem = result.measuresPerSystem;
     particles.setSheetMusic(sheetMusicEl.querySelector('svg'), result.layout);
     applyActiveMeasureClasses();
+    // Fires on every redraw, including the resize-triggered ones from
+    // scheduleRerender() below — measuresPerSystem depends on viewport width,
+    // so the FOV minimap (js/ui/chords-minimap.js) needs to stay in sync with
+    // resizes too, not just progression edits.
+    callbacks.onNotationLayoutChange?.({ measureCount, measuresPerSystem });
     return result;
   }
 
@@ -143,56 +116,11 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     resizeFrame = requestAnimationFrame(drawSheetMusic);
   }
 
-  function clampZoom(value) {
-    // Fine 0.1% precision so trackpad microdeltas accumulate visibly. The
-    // displayed readout still rounds to integer percent, and the +/- buttons
-    // move by 0.1, so both interactions read as clean 10% marks.
-    return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value * 1000) / 1000));
-  }
-
-  function setZoom(nextZoom) {
-    zoom = clampZoom(nextZoom);
-    // Keep the visible sheet the width of its stage at every zoom level. This
-    // gives a zoomed-out sheet additional layout room for more measures per
-    // system, while a crowded measure at higher zoom moves its neighbour to
-    // the next line instead of compressing either bar's notation.
-    layerEl.style.zoom = String(zoom);
-    zoomValueEl.textContent = `${ Math.round(zoom * 100) }%`;
-    zoomOutBtn.disabled = zoom <= ZOOM_MIN + 1e-6;
-    zoomInBtn.disabled = zoom >= ZOOM_MAX - 1e-6;
-    // CSS `zoom` already changes this element's layout coordinate space. Keep
-    // the layer at 100% so the rendered SVG reaches the visual panel width at
-    // every button zoom level; applying an inverse percentage here would make
-    // a zoomed-in score leave a black gap on the right.
-    layerEl.style.width = '100%';
-    scheduleRerender();
-  }
-
-  zoomOutBtn.onclick = () => setZoom(zoom - ZOOM_STEP);
-  zoomInBtn.onclick = () => setZoom(zoom + ZOOM_STEP);
-
-  // Wheel-to-zoom. Every event moves the zoom immediately (responsive),
-  // but by a small fraction of the deltaY so a single mouse-wheel notch
-  // is a 2% nudge rather than the old 10% jump. Trackpad users get finer
-  // deltas and correspondingly smoother motion.
-  function normalizeWheelDelta(event) {
-    if (event.deltaMode === 1) return event.deltaY * WHEEL_DELTA_LINE_PX;
-    if (event.deltaMode === 2) return event.deltaY * WHEEL_DELTA_PAGE_PX;
-    return event.deltaY;
-  }
-  notationStageEl.addEventListener('wheel', (event) => {
-    if (event.deltaY === 0) return;
-    event.preventDefault();
-    setZoom(zoom - normalizeWheelDelta(event) * WHEEL_ZOOM_FACTOR);
-  }, { passive: false });
-
   window.addEventListener('resize', scheduleRerender);
   const panelResizeObserver = typeof ResizeObserver === 'undefined'
     ? null
     : new ResizeObserver(scheduleRerender);
   panelResizeObserver?.observe(container);
-
-  setZoom(zoom);
 
   // ── Tempo override ────────────────────────────────────────────────
   function syncTempoInputs(tempo) {
@@ -222,28 +150,19 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     if (overrideTempo != null) syncTempoInputs(overrideTempo);
   });
 
-  // ── Clef override ─────────────────────────────────────────────────
-  clefSelectEl.addEventListener('change', (event) => {
-    overrideClef = event.target.value;
-    effectiveSettings = computeEffectiveSettings();
-    drawSheetMusic();
-    callbacks.onEffectiveSettingsChange?.(effectiveSettings);
-  });
-
   return {
     transportMount: container.querySelector('#transport-mount'),
     particles,
     render(segments, settings, chords = []) {
       currentSegments = segments;
       currentChords = chords;
-      // Reset overrides when the persistent tempo/clef changes so the panel
-      // never disagrees with the source of truth after project settings edits.
+      // Reset the override when the persistent tempo changes externally so
+      // the panel never disagrees with the source of truth after a project
+      // settings edit.
       if (baseSettings && baseSettings.tempo !== settings.tempo) overrideTempo = null;
-      if (baseSettings && baseSettings.clef !== settings.clef) overrideClef = null;
       baseSettings = settings;
       effectiveSettings = computeEffectiveSettings();
       syncTempoInputs(effectiveSettings.tempo);
-      clefSelectEl.value = effectiveSettings.clef;
       drawSheetMusic();
     },
     setActiveMeasure(index) {
@@ -255,14 +174,15 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     getEffectiveSettings() {
       return effectiveSettings ?? baseSettings;
     },
+    setChordsPanelOpen(open) {
+      chordsPanelToggleBtn.classList.toggle('is-active', open);
+      chordsPanelToggleBtn.setAttribute('aria-pressed', String(open));
+      chordsPanelToggleBtn.setAttribute('aria-label', open ? 'Close chords panel' : 'Open chords panel');
+    },
     unmount() {
       window.removeEventListener('resize', scheduleRerender);
       panelResizeObserver?.disconnect();
       cancelAnimationFrame(resizeFrame);
-      fastReturnBtn.removeEventListener('pointerdown', startFastReturn);
-      fastReturnBtn.removeEventListener('pointerup', stopFastReturn);
-      fastReturnBtn.removeEventListener('pointerleave', stopFastReturn);
-      fastReturnBtn.removeEventListener('pointercancel', stopFastReturn);
       particles.destroy();
     },
   };

@@ -17,8 +17,8 @@ import { vexKeyForNote, chordSpellingIdentity, formatChordSymbol } from '../engi
 import { accidentalFor } from '../engine/key-signature.js';
 import { decompose } from '../engine/rhythm.js';
 
-/** SVG font families per theme chord font — same faces base.css declares. */
-const CHORD_SYMBOL_FAMILIES = { jazztext: 'MuseJazz Text', classical: 'Edwin', scifi: 'Orbitron' };
+/** SVG font family for chord symbols — same face base.css declares. */
+const CHORD_SYMBOL_FAMILY = 'Dalfitra';
 
 const KEY_SIGNATURES = ['Cb', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#'];
 const DURATIONS = new Map([[4, 'w'], [3, 'hd'], [2, 'h'], [1, 'q'], [0.5, '8'], [0.25, '16']]);
@@ -116,7 +116,11 @@ function tieDirections(firstNote, lastNote, count, VF) {
  *                                 identity (so G♯ major reads as G♯/B♯/D♯ and
  *                                 not G♯/C/D♯). Technique-generated segments
  *                                 fall through to key-based spelling.
- * @returns {{measureCount: number, layout: object[]}} Summary plus staff geometry for the Canvas overlay.
+ * @returns {{measureCount: number, layout: object[], measuresPerSystem: number}} Summary plus staff
+ *   geometry for the Canvas overlay. `measuresPerSystem` is how many bars each
+ *   line actually holds (see the "Whole-measure layout" block below) — the
+ *   FOV minimap (js/ui/chords-minimap.js) mirrors it so its own row-wrapping
+ *   matches the real sheet instead of an unrelated fixed column count.
  */
 export function renderNotation(container, segments, settings, chords = []) {
   const VF = window.Vex?.Flow ?? window.VexFlow;
@@ -126,11 +130,11 @@ export function renderNotation(container, segments, settings, chords = []) {
   container.replaceChildren();
   if (!VF) {
     container.innerHTML = '<div class="notice">Notation is still loading. Refresh if this message remains.</div>';
-    return { measureCount: 0, layout: [] };
+    return { measureCount: 0, layout: [], measuresPerSystem: 1 };
   }
   if (!segments.length) {
     container.innerHTML = '<div class="notice">Add a chord to begin the sheet music.</div>';
-    return { measureCount: 0, layout: [] };
+    return { measureCount: 0, layout: [], measuresPerSystem: 1 };
   }
 
   const measureCount = Math.max(...segments.map((segment) => segment.measureIndex)) + 1;
@@ -155,7 +159,7 @@ export function renderNotation(container, segments, settings, chords = []) {
   // the same width as a whole-note bar.
   const chordById = new Map(chords.map((chord) => [chord.id, chord]));
   const symbolAttachedFor = new Set();
-  const symbolFamily = CHORD_SYMBOL_FAMILIES[settings.theme?.chordFont] ?? CHORD_SYMBOL_FAMILIES.scifi;
+  const symbolFamily = CHORD_SYMBOL_FAMILY;
   // A measure whose content is entirely silent is engraved as one centred
   // whole-bar rest, and a trailing partial measure is padded with rests so
   // the final bar reads complete instead of trailing off into blank staff.
@@ -391,6 +395,15 @@ export function renderNotation(container, segments, settings, chords = []) {
     styleModifiers(stave, staffColor);
     context.setStrokeStyle(lineColor); context.setFillStyle(lineColor);
     stave.setStyle({ fillStyle: lineColor, strokeStyle: lineColor }).setContext(context).draw();
+    if (column === 0) {
+      // Measure number above the first bar of each system — standard
+      // engraving convention, and the sheet's own answer to "what bar am I
+      // looking at" now that the score is one continuous scroll instead of a
+      // fixed page.
+      context.setFont('Georgia, serif', 10, '600');
+      context.setFillStyle(staffColor);
+      context.fillText(String(measure + 1), stave.getX() + 2, stave.getYForLine(0) - 6);
+    }
     if (staveNotes.length) {
       formatter.format([voice], staveWidth - (column === 0 ? 120 : 32));
       voice.draw(context, stave);
@@ -440,5 +453,5 @@ export function renderNotation(container, segments, settings, chords = []) {
         .setDirection(direction).setStyle({ fillStyle: staffColor, strokeStyle: staffColor }).setContext(context).draw();
     });
   }
-  return { measureCount, layout };
+  return { measureCount, layout, measuresPerSystem };
 }

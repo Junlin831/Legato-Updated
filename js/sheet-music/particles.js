@@ -18,9 +18,13 @@ const DESKTOP_PARTICLES = 48000;
 const COMPACT_PARTICLES = 20000;
 const MAX_DPR           = 3;
 // Fallback-dot color before a real SVG sample lands — matches render.js's
-// userColor so the transient scaffold blends into the same cosmic palette
-// the assembled notation renders in.
-const HARMONY_TINT       = [143, 147, 232];
+// userColor (#e6ceaa) so the transient scaffold blends into the same warm
+// gold palette the assembled notation renders in. On the startup splash in
+// particular, playback finishes (and the splash tears down) well before its
+// tiny SVG sample is ever allowed to commit — see setSheetMusic()'s
+// "commit only after playback is finished" guard — so this fallback color is
+// the ONLY color the splash's particles ever actually show.
+const HARMONY_TINT       = [230, 206, 170];
 const SAMPLE_CACHE_LIMIT = 3;
 // Dislodge — the pointer leaves a short trail of timestamped "touch" impulses
 // (position + the direction the pointer was travelling at that instant).
@@ -59,11 +63,9 @@ const ease  = (t) => 1 - (1 - clamp(t)) ** 3;
 // project font. Embedding the face as a data: URI inside the serialized
 // markup keeps both layers identical. Fetched once per family, then cached.
 const FONT_SOURCES = new Map([
-  ['MuseJazz Text', { url: '/fonts/MuseJazzText.otf', weight: '400 700', format: 'opentype' }],
-  ['Edwin', { url: '/fonts/Edwin-Bold.otf', weight: '700', format: 'opentype' }],
-  ['Orbitron', { url: '/fonts/Orbitron-Bold.woff2', weight: '700 800', format: 'woff2' }],
+  ['Dalfitra', { url: '/fonts/dalfitra.ttf', weight: '400', format: 'truetype' }],
 ]);
-const FONT_MIME = { opentype: 'font/otf', woff2: 'font/woff2' };
+const FONT_MIME = { truetype: 'font/ttf' };
 const fontDataUris = new Map();
 
 async function fontFaceStyleFor(svg) {
@@ -83,7 +85,7 @@ async function fontFaceStyleFor(svg) {
         for (let i = 0; i < bytes.length; i += 0x8000) {
           binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         }
-        const mime = FONT_MIME[source.format] ?? 'font/otf';
+        const mime = FONT_MIME[source.format] ?? 'font/ttf';
         fontDataUris.set(family, `data:${ mime };base64,${ btoa(binary) }`);
       } catch {
         fontDataUris.set(family, null); // fetch failed: fall back silently
